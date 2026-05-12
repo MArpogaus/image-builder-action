@@ -128,14 +128,6 @@ runs:
       oci: true
       layers: true
 
-  - name: Log in to the Container registry
-    if: github.event_name != 'pull_request'
-    uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121   # v4.1.0
-    with:
-      registry: ${{ inputs.registry }}
-      username: ${{ github.actor }}
-      password: ${{ github.token }}
-
   - name: Push To Registry
     id: push
     if: github.event_name != 'pull_request'
@@ -143,6 +135,14 @@ runs:
     with:
       image: ${{ steps.build_image.outputs.image }}
       tags: ${{ steps.build_image.outputs.tags }}
+      username: ${{ github.actor }}
+      password: ${{ github.token }}
+
+  - name: Log in to the Container registry
+    if: github.event_name != 'pull_request'
+    uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121   # v4.1.0
+    with:
+      registry: ${{ inputs.registry }}
       username: ${{ github.actor }}
       password: ${{ github.token }}
 
