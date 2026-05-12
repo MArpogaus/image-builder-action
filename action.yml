@@ -3,26 +3,33 @@ description: Build, push, and sign container images with SLSA-ready outputs
 inputs:
   image-name:
     description: Name of the image
+    type: string
     required: true
   containerfile:
     description: Path to the Containerfile
+    type: string
     required: true
   context:
     description: Build context directory
+    type: string
     required: false
     default: .
   platform:
     description: Target platform (e.g., linux/amd64)
+    type: string
     required: true
   slsa-verify-source:
     description: Optional source URI for SLSA verification
+    type: string
     required: false
     default: ''
   signing-secret:
     description: The cosign private key for signing
+    type: string
     required: true
   registry:
     description: The registry to push to
+    type: string
     required: false
     default: ghcr.io
 
