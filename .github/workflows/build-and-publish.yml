@@ -37,19 +37,19 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Build and Push Image
-        id: build
-        uses: ./ # Uses the action.yml in the root of this repo
-        with:
-          image-name: ${{ inputs.image-name }}
-          containerfile: ${{ inputs.containerfile }}
-          context: ${{ inputs.context }}
-          platform: ${{ inputs.platform }}
-          slsa-verify-source: ${{ inputs.slsa-verify-source }}
-          signing-secret: ${{ secrets.SIGNING_SECRET }}
+    - name: Build and Push Image
+      id: build
+      uses: ./   # Uses the action.yml in the root of this repo
+      with:
+        image-name: ${{ inputs.image-name }}
+        containerfile: ${{ inputs.containerfile }}
+        context: ${{ inputs.context }}
+        platform: ${{ inputs.platform }}
+        slsa-verify-source: ${{ inputs.slsa-verify-source }}
+        signing-secret: ${{ secrets.SIGNING_SECRET }}
 
   provenance:
     needs: [build_and_push_image]
