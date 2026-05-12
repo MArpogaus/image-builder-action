@@ -7,23 +7,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-build:
-    name: Test Image Build
-    runs-on: ubuntu-latest
+  test-reusable-workflow:
+    name: Test Full Workflow
     permissions:
       contents: read
       packages: write
       id-token: write
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd   # v6.0.2
-
-    - name: Build and Push Image
-      id: build
-      uses: ./
-      with:
-        image-name: test-image
-        containerfile: ./Containerfile
-        context: .
-        platform: linux/amd64
-        signing-secret: ${{ secrets.SIGNING_SECRET }}
+      actions: read
+    # We call the local reusable workflow file
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      image-name: test-image
+      containerfile: ./Containerfile
+      context: .
+      platform: linux/amd64
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
