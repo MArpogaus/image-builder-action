@@ -42,7 +42,7 @@ jobs:
 
     - name: Build and Push Image
       id: build
-      uses: ./   # Uses the action.yml in the root of this repo
+      uses: MArpogaus/image-builder-action@00049dca04a5892c70236ae916faf284097e119e
       with:
         image-name: ${{ inputs.image-name }}
         containerfile: ${{ inputs.containerfile }}
