@@ -1,0 +1,25 @@
+name: Test Action
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  test-reusable-workflow:
+    name: Test Full Workflow
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      actions: read
+    # We call the local reusable workflow file
+    uses: ./.github/workflows/build-and-publish.yml
+    with:
+      image-name: test-image
+      containerfile: ./Containerfile
+      context: .
+      platform: linux/amd64
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
