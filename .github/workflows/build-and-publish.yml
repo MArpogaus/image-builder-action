@@ -24,7 +24,7 @@ jobs:
 
     - name: Build and Push Image
       id: build
-      uses: MArpogaus/image-builder-action@${{ github.ref_name }}
+      uses: ./ # Uses the action.yml in the root of this repo
       with:
         image-name: test-image
         containerfile: ./Containerfile
