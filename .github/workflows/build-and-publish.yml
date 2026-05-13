@@ -1,30 +1,12 @@
 name: Build and publish a container image
 
-permissions: {}
-
 on:
-  workflow_call:
-    inputs:
-      image-name:
-        type: string
-        required: true
-      containerfile:
-        type: string
-        required: true
-      context:
-        type: string
-        required: false
-        default: .
-      platform:
-        type: string
-        required: true
-      slsa-verify-source:
-        type: string
-        required: false
-        default: ''
-    secrets:
-      SIGNING_SECRET:
-        required: true
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions: {}
 
 jobs:
   build_and_push_image:
@@ -42,13 +24,12 @@ jobs:
 
     - name: Build and Push Image
       id: build
-      uses: MArpogaus/image-builder-action@00049dca04a5892c70236ae916faf284097e119e
+      uses: MArpogaus/image-builder-action@${{ github.ref_name }}
       with:
-        image-name: ${{ inputs.image-name }}
-        containerfile: ${{ inputs.containerfile }}
-        context: ${{ inputs.context }}
-        platform: ${{ inputs.platform }}
-        slsa-verify-source: ${{ inputs.slsa-verify-source }}
+        image-name: test-image
+        containerfile: ./Containerfile
+        context: .
+        platform: linux/amd64
         signing-secret: ${{ secrets.SIGNING_SECRET }}
 
   provenance:
