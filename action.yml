@@ -164,9 +164,8 @@ runs:
     if: github.event_name != 'pull_request'
     shell: bash
     run: |
-      IMAGE_FULL="${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}"
-      for tag in ${{ steps.meta.outputs.tags }}; do
-        cosign sign -y --key env://COSIGN_PRIVATE_KEY $IMAGE_FULL:$tag
+      for tag in $(echo "${{ steps.meta.outputs.tags }}"); do
+        cosign sign -y --key env://COSIGN_PRIVATE_KEY "$tag"
       done
     env:
       TAGS: ${{ steps.push.outputs.digest }}
