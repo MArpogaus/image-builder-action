@@ -141,8 +141,8 @@ runs:
     if: github.event_name != 'pull_request'
     uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c   # v2.8
     with:
-      image: ${{ steps.build_image.outputs.image }}
-      tags: ${{ steps.build_image.outputs.tags }}
+      image: ${{ inputs.image-name }}
+      tags: ${{ steps.meta.outputs.tags }}
       username: ${{ github.actor }}
       password: ${{ github.token }}
 
@@ -164,9 +164,9 @@ runs:
     if: github.event_name != 'pull_request'
     shell: bash
     run: |
-      IMAGE_NAME="${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}"
-      for tag in ${{ steps.metadata.outputs.tags }}; do
-        cosign sign -y --key env://COSIGN_PRIVATE_KEY $IMAGE_NAME:$tag
+      IMAGE_FULL="${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}"
+      for tag in ${{ steps.meta.outputs.tags }}; do
+        cosign sign -y --key env://COSIGN_PRIVATE_KEY $IMAGE_FULL:$tag
       done
     env:
       TAGS: ${{ steps.push.outputs.digest }}
