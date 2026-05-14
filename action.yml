@@ -167,7 +167,7 @@ runs:
       IMAGE_REF: ${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}@${{ steps.push.outputs.digest }}
       COSIGN_EXPERIMENTAL: false
       COSIGN_PRIVATE_KEY: ${{ inputs.signing-secret }}
-    run: cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY "${IMAGE_REF}"
+    run: cosign sign -y --recursive --upload=true --key env://COSIGN_PRIVATE_KEY "${IMAGE_REF}"
 
   - name: Echo outputs
     shell: bash
