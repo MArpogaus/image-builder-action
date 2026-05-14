@@ -119,10 +119,7 @@ runs:
         type=raw,value=latest,enable={{is_default_branch}}
         type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
         type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name != 'pull_request' }}
-      labels:
-        org.opencontainers.image.created={{date 'YYYYMMDD-HHmmss'}}
-        org.opencontainers.image.source=https://github.com/${{ github.repository }}/blob/${{ github.sha }}/${{ inputs.containerfile }}
-        org.opencontainers.image.vendor=${{ github.repository_owner }}
+      labels: org.opencontainers.image.created={{date 'YYYYMMDD-HHmmss'}} org.opencontainers.image.source=https://github.com/${{ github.repository }}/blob/${{ github.sha }}/${{ inputs.containerfile }} org.opencontainers.image.vendor=${{ github.repository_owner }}
 
   - name: Build Image
     id: build_image
@@ -158,7 +155,7 @@ runs:
     if: github.event_name != 'pull_request'
     uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6   # v4.1.2
     with:
-      cosign-release: 'v2.6.3'
+      cosign-release: v2.6.3
 
   - name: Sign container image
     if: github.event_name != 'pull_request'
