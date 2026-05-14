@@ -163,13 +163,11 @@ runs:
   - name: Sign container image
     if: github.event_name != 'pull_request'
     shell: bash
-    run: |
-      IMAGE_NAME="${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}"
-      IMAGE_REF="${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
-      cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY "${IMAGE_REF}"
     env:
+      IMAGE_REF: ${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}@${{ steps.push.outputs.digest }}
       COSIGN_EXPERIMENTAL: false
       COSIGN_PRIVATE_KEY: ${{ inputs.signing-secret }}
+    run: cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY "${IMAGE_REF}"
 
   - name: Echo outputs
     shell: bash
