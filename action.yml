@@ -176,6 +176,19 @@ runs:
       done
       cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY ${images}
 
+  - name: Verify container image  
+    if: github.event_name != 'pull_request'
+    shell: bash
+    env:
+      TAGS: ${{ steps.meta.outputs.tags }}
+    run: |
+      images=""
+      for tag in $(echo "${TAGS}"); do
+        images+="${tag} "
+      done
+      cosign verify --key cosign.pub ${images}
+
+
   - name: Echo outputs
     shell: bash
     run: |
