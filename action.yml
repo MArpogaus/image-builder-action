@@ -123,6 +123,8 @@ runs:
         org.opencontainers.image.created={{date 'YYYYMMDD-HHmmss'}}
         org.opencontainers.image.source=https://github.com/${{ github.repository }}/blob/${{ github.sha }}/${{ inputs.containerfile }}
         org.opencontainers.image.vendor=${{ github.repository_owner }}
+        org.opencontainers.image.url=${{ github.event.repository.html_url }}
+        org.opencontainers.image.revision=${{ github.sha }}
 
   - name: Build Image
     id: build_image
