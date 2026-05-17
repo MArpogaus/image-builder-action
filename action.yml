@@ -164,10 +164,13 @@ runs:
     if: github.event_name != 'pull_request'
     shell: bash
     env:
-      IMAGE_REF: ${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}@${{ steps.push.outputs.digest }}
+      IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
       COSIGN_EXPERIMENTAL: false
       COSIGN_PRIVATE_KEY: ${{ inputs.signing-secret }}
-    run: cosign sign -y --recursive --upload=true --key env://COSIGN_PRIVATE_KEY "${IMAGE_REF}"
+    run: |
+      for tag in $(echo "${{ steps.meta.outputs.tags }}"); do
+        cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY "${tag}@${IMAGE_DIGEST}"
+      done
 
   - name: Echo outputs
     shell: bash
