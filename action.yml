@@ -166,13 +166,15 @@ runs:
     if: github.event_name != 'pull_request'
     shell: bash
     env:
-      IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
-      COSIGN_EXPERIMENTAL: false
+      TAGS: ${{ steps.meta.outputs.tags }}
+      DIGEST: ${{ steps.push.outputs.digest }}
       COSIGN_PRIVATE_KEY: ${{ inputs.signing-secret }}
     run: |
-      for tag in $(echo "${{ steps.meta.outputs.tags }}"); do
-        cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY "${tag}@${IMAGE_DIGEST}"
+      images=""
+      for tag in $(echo "${TAGS}"); do
+        images+="${tag}@${DIGEST} "
       done
+      cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY ${images}
 
   - name: Echo outputs
     shell: bash
