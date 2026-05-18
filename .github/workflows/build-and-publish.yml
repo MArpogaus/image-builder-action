@@ -31,6 +31,7 @@ jobs:
         context: .
         platform: linux/amd64
         signing-secret: ${{ secrets.SIGNING_SECRET }}
+        free-disk-space: false
 
   provenance:
     needs: [build_and_push_image]
