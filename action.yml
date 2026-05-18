@@ -35,7 +35,7 @@ inputs:
     description: The registry to push to
     type: string
     required: false
-    default: ghcr.io
+    default: ghcr.io/${{ github.repository_owner }}
   free-disk-space:
     description: Maximize build space
     type: bool
