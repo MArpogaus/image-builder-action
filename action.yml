@@ -48,13 +48,6 @@ outputs:
 runs:
   using: composite
   steps:
-  - name: Lowercase Registry
-    id: registry_case
-    shell: bash
-    run: |
-      REGISTRY_LOWER=$(echo "${{ inputs.registry }}/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-      echo "lowercase=${REGISTRY_LOWER}" >> $GITHUB_OUTPUT
-
   - name: Maximize build space
     uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be   # v1.3.1
     with:
@@ -110,7 +103,7 @@ runs:
     id: meta
     uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf   # v6.0.0
     with:
-      images: ${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}
+      images: ${{ inputs.registry }}/${{ inputs.image-name }}
       tags: |
         type=ref,event=branch
         type=ref,event=pr
