@@ -167,6 +167,8 @@ runs:
       DIGEST: ${{ steps.push.outputs.digest }}
       COSIGN_PRIVATE_KEY: ${{ inputs.signing-secret }}
     run: |
+      set -exuo pipefail
+
       images=""
       for tag in $(echo "${TAGS}"); do
         images+="${tag}@${DIGEST} "
@@ -179,6 +181,8 @@ runs:
     env:
       TAGS: ${{ steps.meta.outputs.tags }}
     run: |
+      set -exuo pipefail
+
       images=""
       for tag in $(echo "${TAGS}"); do
         images+="${tag} "
