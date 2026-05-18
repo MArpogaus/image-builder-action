@@ -35,7 +35,12 @@ inputs:
     description: The registry to push to
     type: string
     required: false
-    default: ghcr.io
+    default: ghcr.io/${{ github.repository_owner }}
+  free-disk-space:
+    description: Maximize build space
+    type: bool
+    required: false
+    default: true
 
 outputs:
   full-image-ref:
@@ -48,14 +53,8 @@ outputs:
 runs:
   using: composite
   steps:
-  - name: Lowercase Registry
-    id: registry_case
-    shell: bash
-    run: |
-      REGISTRY_LOWER=$(echo "${{ inputs.registry }}/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-      echo "lowercase=${REGISTRY_LOWER}" >> $GITHUB_OUTPUT
-
   - name: Maximize build space
+    if: ${{ inputs.free-disk-space == 'true' }}
     uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be   # v1.3.1
     with:
       tool-cache: true
@@ -110,7 +109,7 @@ runs:
     id: meta
     uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf   # v6.0.0
     with:
-      images: ${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}
+      images: ${{ inputs.registry }}/${{ inputs.image-name }}
       tags: |
         type=ref,event=branch
         type=ref,event=pr
@@ -123,6 +122,8 @@ runs:
         org.opencontainers.image.created={{date 'YYYYMMDD-HHmmss'}}
         org.opencontainers.image.source=https://github.com/${{ github.repository }}/blob/${{ github.sha }}/${{ inputs.containerfile }}
         org.opencontainers.image.vendor=${{ github.repository_owner }}
+        org.opencontainers.image.url=${{ github.event.repository.html_url }}
+        org.opencontainers.image.revision=${{ github.sha }}
 
   - name: Build Image
     id: build_image
@@ -141,8 +142,8 @@ runs:
     if: github.event_name != 'pull_request'
     uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c   # v2.8
     with:
-      image: ${{ inputs.image-name }}
-      tags: ${{ steps.meta.outputs.tags }}
+      image: ${{ steps.build_image.outputs.image }}
+      tags: ${{ steps.build_image.outputs.tags }}
       username: ${{ github.actor }}
       password: ${{ github.token }}
 
@@ -156,20 +157,37 @@ runs:
 
   - name: Install cosign
     if: github.event_name != 'pull_request'
-    uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6   # v4.1.2
-    with:
-      cosign-release: v3.0.6
+    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Sign container image
     if: github.event_name != 'pull_request'
     shell: bash
-    run: |
-      IMAGE_NAME="${{ steps.registry_case.outputs.lowercase }}/${{ inputs.image-name }}"
-      IMAGE_REF="${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
-      cosign sign -y --recursive --key env://COSIGN_PRIVATE_KEY "${IMAGE_REF}"
     env:
-      COSIGN_EXPERIMENTAL: false
+      TAGS: ${{ steps.meta.outputs.tags }}
+      DIGEST: ${{ steps.push.outputs.digest }}
       COSIGN_PRIVATE_KEY: ${{ inputs.signing-secret }}
+    run: |
+      set -exuo pipefail
+
+      images=""
+      for tag in $(echo "${TAGS}"); do
+        images+="${tag}@${DIGEST} "
+      done
+      cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY ${images}
+
+  - name: Verify container image
+    if: github.event_name != 'pull_request'
+    shell: bash
+    env:
+      TAGS: ${{ steps.meta.outputs.tags }}
+    run: |
+      set -exuo pipefail
+
+      images=""
+      for tag in $(echo "${TAGS}"); do
+        images+="${tag} "
+      done
+      cosign verify --key cosign.pub ${images}
 
   - name: Echo outputs
     shell: bash
