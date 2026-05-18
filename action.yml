@@ -143,7 +143,6 @@ runs:
     if: github.event_name != 'pull_request'
     uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c   # v2.8
     with:
-      image: ${{ inputs.image-name }}
       tags: ${{ steps.meta.outputs.tags }}
       username: ${{ github.actor }}
       password: ${{ github.token }}
@@ -187,7 +186,6 @@ runs:
         images+="${tag} "
       done
       cosign verify --key cosign.pub ${images}
-
 
   - name: Echo outputs
     shell: bash
