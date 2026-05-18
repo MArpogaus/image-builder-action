@@ -36,6 +36,11 @@ inputs:
     type: string
     required: false
     default: ghcr.io
+  free-disk-space:
+    description: Maximize build space
+    type: bool
+    required: false
+    default: true
 
 outputs:
   full-image-ref:
@@ -49,6 +54,7 @@ runs:
   using: composite
   steps:
   - name: Maximize build space
+    if: ${{ inputs.free-disk-space }}
     uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be   # v1.3.1
     with:
       tool-cache: true
