@@ -83,13 +83,12 @@ runs:
     if: ${{ inputs.cosign-public-key != '' }}
     uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
-  - name: Verify base image
+  - name: Install crane and resolve base image
+    id: resolve-base
     if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
     shell: bash
     env:
       CONTAINERFILE: ${{ inputs.containerfile }}
-      SOURCE_URI: ${{ inputs.slsa-verify-source }}
-      COSIGN_PUBLIC_KEY: ${{ inputs.cosign-public-key }}
       BUILD_ARGS: ${{ inputs.build-args }}
     run: |
       set -exuo pipefail
@@ -128,26 +127,36 @@ runs:
           RAW_BASE="${RAW_BASE//\$$key/$value}"
         done <<< "${BUILD_ARGS}"
       fi
-      BASE_TAG="$RAW_BASE"
 
-      # Resolve immutable digest
-      DIGEST=$(crane digest "${BASE_TAG}")
-      echo "Verified base image: ${BASE_TAG}@${DIGEST}"
+      # Resolve immutable digest and persist for downstream steps
+      DIGEST=$(crane digest "${RAW_BASE}")
+      echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
+      echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
 
-      # Cosign verify
-      if [ -n "${COSIGN_PUBLIC_KEY}" ]; then
-        if echo "${COSIGN_PUBLIC_KEY}" | grep -qE '^https?://'; then
-          cosign verify --key "${COSIGN_PUBLIC_KEY}" "${BASE_TAG}@${DIGEST}"
-        else
-          echo "${COSIGN_PUBLIC_KEY}" > /tmp/cosign.pub
-          cosign verify --key /tmp/cosign.pub "${BASE_TAG}@${DIGEST}"
-        fi
+  - name: Cosign verify base image
+    if: ${{ inputs.cosign-public-key != '' }}
+    shell: bash
+    env:
+      COSIGN_PUBLIC_KEY: ${{ inputs.cosign-public-key }}
+    run: |
+      set -exuo pipefail
+
+      if echo "${COSIGN_PUBLIC_KEY}" | grep -qE '^https?://'; then
+        cosign verify --key "${COSIGN_PUBLIC_KEY}" "${BASE_TAG}@${BASE_DIGEST}"
+      else
+        echo "${COSIGN_PUBLIC_KEY}" > /tmp/cosign.pub
+        cosign verify --key /tmp/cosign.pub "${BASE_TAG}@${BASE_DIGEST}"
       fi
 
-      # SLSA verify
-      if [ -n "${SOURCE_URI}" ]; then
-        slsa-verifier verify-image --source-uri "${SOURCE_URI}" "${BASE_TAG}@${DIGEST}"
-      fi
+  - name: SLSA verify base image
+    if: ${{ inputs.slsa-verify-source != '' }}
+    shell: bash
+    env:
+      SOURCE_URI: ${{ inputs.slsa-verify-source }}
+    run: |
+      set -exuo pipefail
+
+      slsa-verifier verify-image --source-uri "${SOURCE_URI}" "${BASE_TAG}@${BASE_DIGEST}"
 
   - name: Cache podman
     uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae   # v5.0.5
