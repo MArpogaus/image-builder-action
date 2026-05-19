@@ -41,6 +41,16 @@ inputs:
     type: bool
     required: false
     default: true
+  cosign-public-key:
+    description: Public key content or URL to verify the base image cosign signature
+    type: string
+    required: false
+    default: ''
+  build-args:
+    description: Build arguments to pass to the container build (newline-separated KEY=VALUE)
+    type: string
+    required: false
+    default: ''
 
 outputs:
   full-image-ref:
@@ -69,12 +79,17 @@ runs:
     if: ${{ inputs.slsa-verify-source != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
 
-  - name: Verify base image provenance
+  - name: Install cosign
+    if: ${{ inputs.cosign-public-key != '' }}
+    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
+  - name: Install crane and resolve base image
+    id: resolve-base
+    if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
     shell: bash
-    if: ${{ inputs.slsa-verify-source != '' }}
     env:
       CONTAINERFILE: ${{ inputs.containerfile }}
-      SOURCE_URI: ${{ inputs.slsa-verify-source }}
+      BUILD_ARGS: ${{ inputs.build-args }}
     run: |
       set -exuo pipefail
 
@@ -89,15 +104,59 @@ runs:
         "${CRANE_BASE}/${CRANE_VERSION}/${CRANE_FILE}" \
         -o 'provenance.intoto.jsonl' \
         "${CRANE_BASE}/${CRANE_VERSION}/multiple.intoto.jsonl"
-      slsa-verifier verify-artifact go-containerregistry.tar.gz \
-        --provenance-path provenance.intoto.jsonl \
-        --source-uri github.com/google/go-containerregistry \
-        --source-tag "${CRANE_VERSION}"
+      if command -v slsa-verifier &>/dev/null; then
+        slsa-verifier verify-artifact go-containerregistry.tar.gz \
+          --provenance-path provenance.intoto.jsonl \
+          --source-uri github.com/google/go-containerregistry \
+          --source-tag "${CRANE_VERSION}"
+      fi
       tar -zxvf go-containerregistry.tar.gz -C /usr/local/bin/ crane
 
-      BASE_IMAGE=${BASE_IMAGE:-$(grep -P '^FROM ([a-z.-]+(/|:\w+))+' ${CONTAINERFILE} | cut -d ' ' -f 2)}
-      DIGEST=$(crane digest "${BASE_IMAGE}")
-      slsa-verifier verify-image --source-uri $SOURCE_URI "${BASE_IMAGE}@${DIGEST}"
+      # Find the last non-scratch FROM to get the base image
+      RAW_BASE=$(grep -E '^FROM\s+' "${CONTAINERFILE}" | grep -vE '\bscratch\b' | tail -1 | awk '{print $2}')
+      if [ -z "$RAW_BASE" ]; then
+        echo "No base image found to verify" >&2
+        exit 1
+      fi
+
+      # Resolve build args in FROM (e.g., ${BASE_IMAGE} or $BASE_IMAGE)
+      if [ -n "${BUILD_ARGS}" ]; then
+        while IFS='=' read -r key value; do
+          [ -z "$key" ] && continue
+          RAW_BASE="${RAW_BASE//\$\{$key\}/$value}"
+          RAW_BASE="${RAW_BASE//\$$key/$value}"
+        done <<< "${BUILD_ARGS}"
+      fi
+
+      # Resolve immutable digest and persist for downstream steps
+      DIGEST=$(crane digest "${RAW_BASE}")
+      echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
+      echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+
+  - name: Cosign verify base image
+    if: ${{ inputs.cosign-public-key != '' }}
+    shell: bash
+    env:
+      COSIGN_PUBLIC_KEY: ${{ inputs.cosign-public-key }}
+    run: |
+      set -exuo pipefail
+
+      if echo "${COSIGN_PUBLIC_KEY}" | grep -qE '^https?://'; then
+        cosign verify --key "${COSIGN_PUBLIC_KEY}" "${BASE_TAG}@${BASE_DIGEST}"
+      else
+        echo "${COSIGN_PUBLIC_KEY}" > /tmp/cosign.pub
+        cosign verify --key /tmp/cosign.pub "${BASE_TAG}@${BASE_DIGEST}"
+      fi
+
+  - name: SLSA verify base image
+    if: ${{ inputs.slsa-verify-source != '' }}
+    shell: bash
+    env:
+      SOURCE_URI: ${{ inputs.slsa-verify-source }}
+    run: |
+      set -exuo pipefail
+
+      slsa-verifier verify-image --source-uri "${SOURCE_URI}" "${BASE_TAG}@${BASE_DIGEST}"
 
   - name: Cache podman
     uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae   # v5.0.5
@@ -134,6 +193,7 @@ runs:
       platforms: ${{ inputs.platform }}
       tags: ${{ steps.meta.outputs.tags }}
       labels: ${{ steps.meta.outputs.labels }}
+      build-args: ${{ inputs.build-args }}
       oci: true
       layers: true
 

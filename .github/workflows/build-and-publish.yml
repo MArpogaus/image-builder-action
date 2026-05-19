@@ -1,4 +1,4 @@
-name: Build and publish a container image
+name: Build and test container images
 
 on:
   pull_request:
@@ -9,40 +9,55 @@ on:
 permissions: {}
 
 jobs:
-  build_and_push_image:
-    runs-on: ubuntu-latest
-    outputs:
-      FULL_IMAGE_REF: ${{ steps.build.outputs.full-image-ref }}
-      IMAGE_DIGEST: ${{ steps.build.outputs.image-digest }}
+  build-basic:
     permissions:
       contents: read
-      packages: write
-      id-token: write
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd   # v6.0.2
-
-    - name: Build and Push Image
-      id: build
-      uses: ./ # Uses the action.yml in the root of this repo
-      with:
-        image-name: test-image
-        containerfile: ./Containerfile
-        context: .
-        platform: linux/amd64
-        signing-secret: ${{ secrets.SIGNING_SECRET }}
-        free-disk-space: false
-
-  provenance:
-    needs: [build_and_push_image]
-    permissions:
       actions: read
-      id-token: write
       packages: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+      id-token: write
+    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
     with:
-      image: ${{ needs.build_and_push_image.outputs.FULL_IMAGE_REF }}
-      digest: ${{ needs.build_and_push_image.outputs.IMAGE_DIGEST }}
-      registry-username: ${{ github.actor }}
+      image-name: test-basic
+      containerfile: ./examples/Containerfile.basic
+      context: .
+      platform: linux/amd64
+      free-disk-space: false
     secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+
+  build-derived:
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
+    with:
+      image-name: test-derived
+      containerfile: ./examples/Containerfile.derived
+      context: .
+      platform: linux/amd64
+      build-args: BASE_IMAGE=ghcr.io/ublue-os/arch-toolbox:latest
+      cosign-public-key: https://raw.githubusercontent.com/ublue-os/main/main/cosign.pub
+      free-disk-space: false
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+
+  test-slsa:
+    needs: [build-basic]
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
+    with:
+      image-name: test-slsa
+      containerfile: ./examples/Containerfile.slsa
+      context: .
+      platform: linux/amd64
+      slsa-verify-source: github.com/MArpogaus/image-builder-action
+      free-disk-space: false
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
