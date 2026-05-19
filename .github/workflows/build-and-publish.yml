@@ -21,6 +21,7 @@ jobs:
       containerfile: ./examples/Containerfile.basic
       context: .
       platform: linux/amd64
+      free-disk-space: false
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
@@ -38,6 +39,7 @@ jobs:
       platform: linux/amd64
       build-args: BASE_IMAGE=ghcr.io/ublue-os/arch-toolbox:latest
       cosign-public-key: https://raw.githubusercontent.com/ublue-os/main/main/cosign.pub
+      free-disk-space: false
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
@@ -56,5 +58,6 @@ jobs:
       context: .
       platform: linux/amd64
       slsa-verify-source: github.com/MArpogaus/image-builder-action
+      free-disk-space: false
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
