@@ -27,6 +27,7 @@ jobs:
   build-derived:
     permissions:
       contents: read
+      actions: read
       packages: write
       id-token: write
     uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
