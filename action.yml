@@ -79,10 +79,6 @@ runs:
     if: ${{ inputs.slsa-verify-source != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
 
-  - name: Install cosign
-    if: ${{ inputs.cosign-public-key != '' }}
-    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
-
   - name: Install crane and resolve base image
     id: resolve-base
     if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
@@ -132,6 +128,10 @@ runs:
       DIGEST=$(crane digest "${RAW_BASE}")
       echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
       echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
+
+  - name: Install cosign
+    if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
+    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Cosign verify base image
     if: ${{ inputs.cosign-public-key != '' }}
@@ -214,10 +214,6 @@ runs:
       registry: ${{ inputs.registry }}
       username: ${{ github.actor }}
       password: ${{ github.token }}
-
-  - name: Install cosign
-    if: github.event_name != 'pull_request'
-    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Sign container image
     if: github.event_name != 'pull_request'
