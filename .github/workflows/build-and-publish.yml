@@ -74,7 +74,7 @@ jobs:
       containerfile: ./examples/Containerfile.basic
       context: .
       platform: linux/amd64
-      overwrite-ref-tag: 'test'
+      overwrite-ref-tag: test
       free-disk-space: false
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
