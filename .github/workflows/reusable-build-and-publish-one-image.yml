@@ -33,6 +33,10 @@ on:
         type: boolean
         required: false
         default: true
+      overwrite-ref-tag:
+        type: string
+        required: false
+        default: ''
     secrets:
       SIGNING_SECRET:
         required: true
@@ -63,6 +67,7 @@ jobs:
         cosign-public-key: ${{ inputs.cosign-public-key }}
         build-args: ${{ inputs.build-args }}
         free-disk-space: ${{ inputs.free-disk-space }}
+        overwrite-ref-tag: ${{ inputs.overwrite-ref-tag }}
         signing-secret: ${{ secrets.SIGNING_SECRET }}
 
   provenance:
