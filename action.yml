@@ -51,6 +51,11 @@ inputs:
     type: string
     required: false
     default: ''
+  overwrite-ref-tag:
+    description: Replace {{branch}} in auto-generated tags with this value (e.g., '31' → ':31', ':31-<sha>')
+    type: string
+    required: false
+    default: ''
 
 outputs:
   full-image-ref:
@@ -78,10 +83,6 @@ runs:
   - name: Install slsa-verifier
     if: ${{ inputs.slsa-verify-source != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
-
-  - name: Install cosign
-    if: ${{ inputs.cosign-public-key != '' }}
-    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Install crane and resolve base image
     id: resolve-base
@@ -133,6 +134,10 @@ runs:
       echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
       echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
 
+  - name: Install cosign
+    if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
+    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+
   - name: Cosign verify base image
     if: ${{ inputs.cosign-public-key != '' }}
     shell: bash
@@ -158,6 +163,38 @@ runs:
 
       slsa-verifier verify-image --source-uri "${SOURCE_URI}" "${BASE_TAG}@${BASE_DIGEST}"
 
+  - name: Build tag list for metadata action
+    id: tags
+    shell: bash
+    env:
+      OVERWRITE_REF_TAG: ${{ inputs.overwrite-ref-tag }}
+    run: |
+      TAGS=$(
+      cat <<-'TAGEOF'
+      type=ref,event=branch
+      type=ref,event=pr
+      type=semver,pattern={{version}}
+      type=semver,pattern={{major}}.{{minor}}
+      type=raw,value=latest,enable={{is_default_branch}}
+      type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
+      type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name != 'pull_request' }}
+      TAGEOF
+      )
+
+      ORT="${OVERWRITE_REF_TAG}"
+      if [ -n "${ORT}" ]; then
+        TAGS=$(echo "${TAGS}" \
+          | sed "s|type=ref,event=branch|type=raw,value=${ORT}|" \
+          | sed "s/{{branch}}/${ORT}/g")
+      fi
+
+      delimiter="TAGS_EOF_$(date +%s)"
+      {
+        echo "tags<<${delimiter}"
+        echo "${TAGS}"
+        echo "${delimiter}"
+      } >> "${GITHUB_OUTPUT}"
+
   - name: Cache podman
     uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae   # v5.0.5
     with:
@@ -166,17 +203,10 @@ runs:
 
   - name: Extract metadata (tags, labels) for Docker
     id: meta
-    uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf   # v6.0.0
+    uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9   # v6.1.0
     with:
       images: ${{ inputs.registry }}/${{ inputs.image-name }}
-      tags: |
-        type=ref,event=branch
-        type=ref,event=pr
-        type=semver,pattern={{version}}
-        type=semver,pattern={{major}}.{{minor}}
-        type=raw,value=latest,enable={{is_default_branch}}
-        type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
-        type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name != 'pull_request' }}
+      tags: ${{ steps.tags.outputs.tags }}
       labels: |
         org.opencontainers.image.created={{date 'YYYYMMDD-HHmmss'}}
         org.opencontainers.image.source=https://github.com/${{ github.repository }}/blob/${{ github.sha }}/${{ inputs.containerfile }}
@@ -209,15 +239,11 @@ runs:
 
   - name: Log in to the Container registry
     if: github.event_name != 'pull_request'
-    uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121   # v4.1.0
+    uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee   # v4.2.0
     with:
       registry: ${{ inputs.registry }}
       username: ${{ github.actor }}
       password: ${{ github.token }}
-
-  - name: Install cosign
-    if: github.event_name != 'pull_request'
-    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Sign container image
     if: github.event_name != 'pull_request'

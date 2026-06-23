@@ -33,6 +33,10 @@ on:
         type: boolean
         required: false
         default: true
+      overwrite-ref-tag:
+        type: string
+        required: false
+        default: ''
     secrets:
       SIGNING_SECRET:
         required: true
@@ -49,7 +53,7 @@ jobs:
       id-token: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd   # v6.0.2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10   # v6.0.3
 
     - name: Build and Push Image
       id: build
@@ -63,6 +67,7 @@ jobs:
         cosign-public-key: ${{ inputs.cosign-public-key }}
         build-args: ${{ inputs.build-args }}
         free-disk-space: ${{ inputs.free-disk-space }}
+        overwrite-ref-tag: ${{ inputs.overwrite-ref-tag }}
         signing-secret: ${{ secrets.SIGNING_SECRET }}
 
   provenance:
