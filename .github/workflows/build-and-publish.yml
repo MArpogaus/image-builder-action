@@ -61,3 +61,20 @@ jobs:
       free-disk-space: false
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+
+  build-overwrite-tag:
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
+    with:
+      image-name: test-overwrite
+      containerfile: ./examples/Containerfile.basic
+      context: .
+      platform: linux/amd64
+      overwrite-ref-tag: 'test'
+      free-disk-space: false
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
