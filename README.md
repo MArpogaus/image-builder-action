@@ -80,6 +80,18 @@ This action is designed with security in mind:
 - **SLSA Level 3**: Provides the highest level of build integrity for GitHub Actions.
 - **OIDC**: Uses GitHub OIDC for signing and provenance.
 
+## Development
+
+```bash
+pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
+```
+
+Plain `pre-commit install` wires up only the pre-commit stage, so the
+commitizen message and branch checks stay dormant. Hooks: shellcheck,
+pretty-format-yaml, commitizen for conventional commits.
+CI runs the same set on push and pull request. Actions are pinned to SHAs, and
+dependabot updates actions and hook revisions weekly against `dev`.
+
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
