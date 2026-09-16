@@ -7,5 +7,18 @@ updates:
   target-branch: dev
   groups:
     actions:
-      patterns:
-      - '*'
+      patterns: ['*']
+  ignore:
+  # v4 does not push the signature to GHCR, so `cosign verify` fails with
+  # "no signatures found". Revisit only with a working end-to-end test.
+  - dependency-name: sigstore/cosign-installer
+    versions: ['>=4']
+
+- package-ecosystem: pre-commit
+  directory: /
+  schedule:
+    interval: weekly
+  target-branch: dev
+  groups:
+    pre-commit:
+      patterns: ['*']
