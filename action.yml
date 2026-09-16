@@ -136,6 +136,9 @@ runs:
 
   - name: Install cosign
     if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
+    # Pinned to v3 deliberately: v4 does not push the signature to GHCR, so
+    # verification fails with "no signatures found". Dependabot is told to
+    # leave this alone in .github/dependabot.yml.
     uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Cosign verify base image
@@ -216,7 +219,7 @@ runs:
 
   - name: Build Image
     id: build_image
-    uses: redhat-actions/buildah-build@3a51aade9afa17e5c78256bcbe2e1ee08c7b995b   # v3.0.2
+    uses: redhat-actions/buildah-build@719e3c40d8af9790c23eca13f7daa339f2867034   # v3.1.0
     with:
       containerfiles: ${{ inputs.containerfile }}
       context: ${{ inputs.context }}
@@ -237,6 +240,8 @@ runs:
       username: ${{ github.actor }}
       password: ${{ github.token }}
 
+  # After the push, not before: push-to-registry authenticates itself, while
+  # cosign needs credentials in the docker config to push signatures.
   - name: Log in to the Container registry
     if: github.event_name != 'pull_request'
     uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f   # v4.6.0

@@ -30,7 +30,7 @@ jobs:
       packages: write
       id-token: write
       actions: read
-    uses: MArpogaus/image-builder-action/.github/workflows/build-and-publish.yml@main
+    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@v1.5.2
     with:
       image-name: my-cool-app
       containerfile: ./Containerfile
@@ -61,17 +61,33 @@ jobs:
 
 ## Inputs
 
-| Input                | Description                                     | Required | Default   |
-|----------------------|-------------------------------------------------|----------|-----------|
-| `image-name`         | Name of the image to be published               | **Yes**  | -         |
-| `containerfile`      | Path to the Containerfile                       | **Yes**  | -         |
-| `context`            | Build context directory                         | No       | `.`       |
-| `platform`           | Target platform (e.g., `linux/amd64`)           | **Yes**  | -         |
-| `slsa-verify-source` | Source URI for SLSA verification of base image  | No       | `''`      |
-| `signing-secret`     | The `cosign` private key (for action.yml usage) | No*      | -         |
-| `registry`           | The registry to push to                         | No       | `ghcr.io` |
+| Input                | Description                                                        | Required | Default   |
+|----------------------|--------------------------------------------------------------------|----------|-----------|
+| `image-name`         | Name of the image to be published                                  | **Yes**  | -         |
+| `containerfile`      | Path to the Containerfile                                          | **Yes**  | -         |
+| `platform`           | Target platform (e.g. `linux/amd64`)                               | **Yes**  | -         |
+| `signing-secret`     | The cosign private key. A secret named `SIGNING_SECRET` for the reusable workflow | **Yes** | - |
+| `context`            | Build context directory                                            | No       | `.`       |
+| `registry`           | The registry to push to                                            | No       | `ghcr.io` |
+| `slsa-verify-source` | Source URI for SLSA verification of the base image                 | No       | `''`      |
+| `cosign-public-key`  | Public key, or a URL to one, to verify the base image's signature  | No       | `''`      |
+| `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |
+| `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `false`   |
+| `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
 
-For the reusable workflow, this is passed as a **secret** named `SIGNING_SECRET`.
+## Outputs
+
+| Output            | Description                                  |
+|-------------------|----------------------------------------------|
+| `full-image-ref`  | The pushed image reference including its tag |
+| `image-digest`    | The digest of the pushed image               |
+
+### Building several versions from one Containerfile
+
+`overwrite-ref-tag` exists so a matrix can publish `:31`, `:32` and so on from
+one file. Run the matrix with `max-parallel: 1`: every job also publishes
+`latest`, and in parallel they overwrite each other's digest between signing
+and verification, which fails as "no signatures found".
 
 ## Security
 
