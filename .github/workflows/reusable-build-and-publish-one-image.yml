@@ -60,7 +60,7 @@ jobs:
       # Pinned by SHA, not `./`: a relative ref inside a reusable workflow is
       # resolved against the caller's checkout, so a consumer would silently run
       # their own tree instead of this action.
-      uses: MArpogaus/image-builder-action@8605092afc0101efc6ed40ef3a8ea61094ef2c1e
+      uses: MArpogaus/image-builder-action@2ff1c398a189257f537bdd3c9e869710c535d3b0
       with:
         image-name: ${{ inputs.image-name }}
         containerfile: ${{ inputs.containerfile }}
