@@ -59,7 +59,7 @@ runs:
   steps:
   - name: Maximize build space
     if: ${{ inputs.free-disk-space == 'true' }}
-    uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be   # v1.3.1
+    uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6   # v2.0.0
     with:
       tool-cache: true
       android: true
@@ -121,7 +121,7 @@ runs:
   - name: Install cosign
     if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
     # v3 line on purpose; see .github/dependabot.yml.
-    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+    uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
   - name: Cosign verify base image
     if: ${{ inputs.cosign-public-key != '' }}
