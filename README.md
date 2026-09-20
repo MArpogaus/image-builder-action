@@ -3,17 +3,17 @@
 [![Build and publish](https://github.com/MArpogaus/image-builder-action/actions/workflows/build-and-publish.yml/badge.svg)](https://github.com/MArpogaus/image-builder-action/actions/workflows/build-and-publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A state-of-the-art GitHub Action repository for building, pushing, and signing container images with SLSA Level 3 provenance.
+A GitHub Action that builds, pushes and signs container images with SLSA Level 3 provenance.
 
 ## Features
 
-- **Double-sided**: Use as a **Composite Action** (just build/push) or a **Reusable Workflow** (full SLSA chain).
+- **Two entry points**: a **Composite Action** (build and push) or a **Reusable Workflow** (the full SLSA chain).
 - **Multi-platform support**: Build for `linux/amd64`, `linux/arm64`, etc.
 - **SLSA Provenance**: Generates SLSA Level 3 provenance attestations.
 - **Cosign Signing**: Signs images with a provided private key.
 - **Base Image Verification**: Optionally verifies the provenance of the base image.
 - **Disk Optimization**: Maximizes available disk space for large builds.
-- **Caching**: Efficiently caches Podman layers.
+- **Caching**: Caches Podman layers.
 - **Automatic Metadata**: Generates Docker labels and tags based on Git events.
 
 ---
