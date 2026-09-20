@@ -3,9 +3,8 @@
 version: 3
 
 rules:
-# The SLSA generator must be referenced by semver tag, not by commit SHA: the
-# reusable workflow resolves its own source from the tag when it builds the
-# provenance, and a SHA reference breaks verification.
+# SLSA generator: tag, not SHA; see the provenance job in
+# reusable-build-and-publish-one-image.yml.
 - ignore: true
   conditions:
   - expr: |

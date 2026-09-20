@@ -7,53 +7,42 @@ description: Build, push, and sign container images with SLSA-ready outputs
 inputs:
   image-name:
     description: Name of the image
-    type: string
     required: true
   containerfile:
     description: Path to the Containerfile
-    type: string
     required: true
   context:
     description: Build context directory
-    type: string
     required: false
     default: .
   platform:
     description: Target platform (e.g., linux/amd64)
-    type: string
     required: true
   slsa-verify-source:
     description: Optional source URI for SLSA verification
-    type: string
     required: false
     default: ''
   signing-secret:
     description: The cosign private key for signing
-    type: string
     required: true
   registry:
     description: The registry to push to
-    type: string
     required: false
     default: ghcr.io/${{ github.repository_owner }}
   free-disk-space:
     description: Maximize build space
-    type: bool
     required: false
     default: true
   cosign-public-key:
     description: Public key content or URL to verify the base image cosign signature
-    type: string
     required: false
     default: ''
   build-args:
     description: Build arguments to pass to the container build (newline-separated KEY=VALUE)
-    type: string
     required: false
     default: ''
   overwrite-ref-tag:
     description: Replace {{branch}} in auto-generated tags with this value (e.g., '31' → ':31', ':31-<sha>')
-    type: string
     required: false
     default: ''
 
@@ -81,7 +70,7 @@ runs:
       swap-storage: true
 
   - name: Install slsa-verifier
-    if: ${{ inputs.slsa-verify-source != '' }}
+    if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
 
   - name: Install crane and resolve base image
@@ -94,7 +83,6 @@ runs:
     run: |
       set -exuo pipefail
 
-      # Install crane
       CRANE_VERSION=v0.20.7
       CRANE_OS=Linux
       CRANE_ARCH=x86_64
@@ -105,12 +93,10 @@ runs:
         "${CRANE_BASE}/${CRANE_VERSION}/${CRANE_FILE}" \
         -o 'provenance.intoto.jsonl' \
         "${CRANE_BASE}/${CRANE_VERSION}/multiple.intoto.jsonl"
-      if command -v slsa-verifier &>/dev/null; then
-        slsa-verifier verify-artifact go-containerregistry.tar.gz \
-          --provenance-path provenance.intoto.jsonl \
-          --source-uri github.com/google/go-containerregistry \
-          --source-tag "${CRANE_VERSION}"
-      fi
+      slsa-verifier verify-artifact go-containerregistry.tar.gz \
+        --provenance-path provenance.intoto.jsonl \
+        --source-uri github.com/google/go-containerregistry \
+        --source-tag "${CRANE_VERSION}"
       tar -zxvf go-containerregistry.tar.gz -C /usr/local/bin/ crane
 
       # Find the last non-scratch FROM to get the base image
@@ -120,7 +106,6 @@ runs:
         exit 1
       fi
 
-      # Resolve build args in FROM (e.g., ${BASE_IMAGE} or $BASE_IMAGE)
       if [ -n "${BUILD_ARGS}" ]; then
         while IFS='=' read -r key value; do
           [ -z "$key" ] && continue
@@ -129,16 +114,13 @@ runs:
         done <<< "${BUILD_ARGS}"
       fi
 
-      # Resolve immutable digest and persist for downstream steps
       DIGEST=$(crane digest "${RAW_BASE}")
       echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
       echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
 
   - name: Install cosign
     if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
-    # Pinned to v3 deliberately: v4 does not push the signature to GHCR, so
-    # verification fails with "no signatures found". Dependabot is told to
-    # leave this alone in .github/dependabot.yml.
+    # v3 line on purpose; see .github/dependabot.yml.
     uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
 
   - name: Cosign verify base image
@@ -202,7 +184,9 @@ runs:
     uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
     with:
       path: ~/.local/share/containers
-      key: podman
+      # A cache entry is immutable, so a constant key would freeze the first run.
+      key: podman-${{ hashFiles(inputs.containerfile) }}
+      restore-keys: podman-
 
   - name: Extract metadata (tags, labels) for Docker
     id: meta
@@ -261,7 +245,7 @@ runs:
       set -exuo pipefail
 
       images=""
-      for tag in $(echo "${TAGS}"); do
+      for tag in ${TAGS}; do
         images+="${tag}@${DIGEST} "
       done
       cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY ${images}
@@ -275,12 +259,8 @@ runs:
       set -exuo pipefail
 
       images=""
-      for tag in $(echo "${TAGS}"); do
+      for tag in ${TAGS}; do
         images+="${tag} "
       done
+      # The caller's checkout must hold the public key that matches signing-secret.
       cosign verify --key cosign.pub ${images}
-
-  - name: Echo outputs
-    shell: bash
-    run: |
-      echo "${{ toJSON(steps.push.outputs) }}"

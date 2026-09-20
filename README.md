@@ -3,24 +3,17 @@
 [![Build and publish](https://github.com/MArpogaus/image-builder-action/actions/workflows/build-and-publish.yml/badge.svg)](https://github.com/MArpogaus/image-builder-action/actions/workflows/build-and-publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A GitHub Action that builds, pushes and signs container images with SLSA Level 3 provenance.
+Composite action: build with buildah, push, sign with cosign, verify.
+Reusable workflow: the same, plus SLSA level 3 provenance. Optional
+verification of the base image by cosign key or SLSA source. Podman layers are
+cached between runs, and tags and labels come from the Git event.
 
-## Features
+## Usage
 
-- **Two entry points**: a **Composite Action** (build and push) or a **Reusable Workflow** (the full SLSA chain).
-- **Multi-platform support**: Build for `linux/amd64`, `linux/arm64`, etc.
-- **SLSA Provenance**: Generates SLSA Level 3 provenance attestations.
-- **Cosign Signing**: Signs images with a provided private key.
-- **Base Image Verification**: Optionally verifies the provenance of the base image.
-- **Disk Optimization**: Maximizes available disk space for large builds.
-- **Caching**: Caches Podman layers.
-- **Automatic Metadata**: Generates Docker labels and tags based on Git events.
+Commit the public key that matches `SIGNING_SECRET` as `cosign.pub` in the
+repository root. The verify step reads it from the checkout.
 
----
-
-## Usage Option 1: Reusable Workflow (Recommended)
-
-This is the most secure way to build images, as it automatically generates **SLSA Level 3 provenance**.
+The reusable workflow builds, signs and attaches SLSA provenance:
 
 ```yaml
 jobs:
@@ -30,7 +23,7 @@ jobs:
       packages: write
       id-token: write
       actions: read
-    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@v1.5.2
+    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@7e52129c98111d7437960159061f3ab0b6fa2f33 # v1.6.0
     with:
       image-name: my-cool-app
       containerfile: ./Containerfile
@@ -39,25 +32,22 @@ jobs:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 ```
 
-## Usage Option 2: Composite Action
-
-Use this if you want to integrate the build/push logic into your own existing job. Note that this **does not** generate SLSA provenance on its own.
+The composite action fits into an existing job. It produces no SLSA provenance
+on its own.
 
 ```yaml
 jobs:
   my-job:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: MArpogaus/image-builder-action@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: MArpogaus/image-builder-action@7e52129c98111d7437960159061f3ab0b6fa2f33 # v1.6.0
         with:
           image-name: my-cool-app
           containerfile: ./Containerfile
           platform: linux/amd64
           signing-secret: ${{ secrets.SIGNING_SECRET }}
 ```
-
----
 
 ## Inputs
 
@@ -68,11 +58,11 @@ jobs:
 | `platform`           | Target platform (e.g. `linux/amd64`)                               | **Yes**  | -         |
 | `signing-secret`     | The cosign private key. A secret named `SIGNING_SECRET` for the reusable workflow | **Yes** | - |
 | `context`            | Build context directory                                            | No       | `.`       |
-| `registry`           | The registry to push to                                            | No       | `ghcr.io` |
+| `registry`           | The registry to push to (not exposed by the reusable workflow)     | No       | `ghcr.io/<owner>` |
 | `slsa-verify-source` | Source URI for SLSA verification of the base image                 | No       | `''`      |
 | `cosign-public-key`  | Public key, or a URL to one, to verify the base image's signature  | No       | `''`      |
 | `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |
-| `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `false`   |
+| `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `true`    |
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
 
 ## Outputs
@@ -91,22 +81,27 @@ and verification, which fails as "no signatures found".
 
 ## Security
 
-This action is designed with security in mind:
-- **Immutable Actions**: It uses hashes for most actions to prevent supply chain attacks.
-- **SLSA Level 3**: Provides the highest level of build integrity for GitHub Actions.
-- **OIDC**: Uses GitHub OIDC for signing and provenance.
+- Every action is pinned to a SHA except the SLSA generator, which verifies its
+  own tag and refuses a digest ref.
+- The SLSA generator signs provenance keyless through GitHub OIDC; images are
+  signed with `SIGNING_SECRET`.
+- `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature did
+  not reach GHCR and `cosign verify` failed with "no signatures found".
+  Dependabot ignores v4 in `.github/dependabot.yml`.
 
 ## Development
+
+Work on `dev`. Conventional commits. Hooks: shellcheck, pretty-format-yaml,
+commitizen. Setup:
 
 ```bash
 pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
 ```
 
-Plain `pre-commit install` wires up only the pre-commit stage, so the
-commitizen message and branch checks stay dormant. Hooks: shellcheck,
-pretty-format-yaml, commitizen for conventional commits.
-CI runs the same set on push and pull request. Actions are pinned to SHAs, and
-dependabot updates actions and hook revisions weekly against `dev`.
+Plain `pre-commit install` wires up the pre-commit stage only, which leaves the
+commit-message and branch hooks dormant. CI runs the same hooks on push and
+pull request. Dependabot updates the actions and the hook revisions weekly
+against `dev`.
 
 ## License
 
