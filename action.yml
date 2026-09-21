@@ -169,14 +169,6 @@ runs:
         echo 'TAGEOF'
       } >> "${GITHUB_OUTPUT}"
 
-  - name: Cache podman
-    uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
-    with:
-      path: ~/.local/share/containers
-      # A cache entry is immutable, so a constant key would freeze the first run.
-      key: podman-${{ hashFiles(inputs.containerfile) }}
-      restore-keys: podman-
-
   - name: Extract metadata (tags, labels) for Docker
     id: meta
     uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302   # v6.2.0
@@ -235,17 +227,20 @@ runs:
     run: |
       set -exuo pipefail
 
-      # TAGS is newline-separated; word splitting is what turns it into a list.
+      # One signature per digest, not per tag: every tag this job pushed points
+      # at the same digest, and cosign stores the signature under the digest.
       cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY \
-        $(printf "%s@${DIGEST} " ${TAGS})
+        "${TAGS%%$'\n'*}@${DIGEST}"
 
   - name: Verify container image
     if: github.event_name != 'pull_request'
     shell: bash
     env:
       TAGS: ${{ steps.meta.outputs.tags }}
+      DIGEST: ${{ steps.push.outputs.digest }}
     run: |
       set -exuo pipefail
 
+      # By digest, so a tag another job moved in between cannot fail this.
       # The caller's checkout must hold the public key that matches signing-secret.
-      cosign verify --key cosign.pub ${TAGS}
+      cosign verify --key cosign.pub "${TAGS%%$'\n'*}@${DIGEST}"

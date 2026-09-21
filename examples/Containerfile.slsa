@@ -1,2 +1,5 @@
-FROM ghcr.io/marpogaus/test-basic:latest
+# The caller passes the image this run just published; :latest only moves on
+# the default branch, so a fixed tag here would verify an older build.
+ARG BASE_IMAGE=ghcr.io/marpogaus/test-basic:latest
+FROM ${BASE_IMAGE}
 RUN echo "slsa-verified build" > /slsa.txt

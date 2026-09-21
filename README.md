@@ -65,15 +65,17 @@ digest with the current base image and skip the build when nothing changed.
 | `registry`           | The registry to push to (not exposed by the reusable workflow)     | No       | `ghcr.io/<owner>` |
 | `slsa-verify-source` | Source URI for SLSA verification of the base image                 | No       | `''`      |
 | `cosign-public-key`  | Public key, or a URL to one, to verify the base image's signature  | No       | `''`      |
-
-The base image is the last non-`scratch` `FROM` in the Containerfile. A
-multi-stage build whose final stage starts from an earlier stage would hand a
-stage name to the digest lookup, so this action expects the final `FROM` to
-name a real image.
 | `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |
 | `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `true`    |
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
 | `latest-tag`         | Also publish `:latest` from the default branch; a matrix sets it for its highest version only | No | `true` |
+
+The base image is the last non-`scratch` `FROM` in the Containerfile. A
+multi-stage build whose final stage starts from an earlier stage would hand a
+stage name to the digest lookup, so this action expects the final `FROM` to
+name a real image. A `FROM ${BASE}` is resolved from `build-args` only: give
+the same value there even when the Containerfile has an `ARG` default, or the
+digest lookup fails on the literal `${BASE}`.
 
 ## Outputs
 
@@ -86,9 +88,8 @@ name a real image.
 
 `overwrite-ref-tag` exists so a matrix can publish `:31`, `:32` and so on from
 one file. Set `latest-tag` only for the highest version, otherwise `:latest`
-is whichever job finished last. Run the matrix with `max-parallel: 1`: jobs
-that publish the same tag in parallel overwrite each other's digest between
-signing and verification, which fails as "no signatures found".
+is whichever job finished last. Run the matrix with `max-parallel: 1`: two jobs
+publishing `:latest` at once race for which digest the tag ends up on.
 
 ## Security
 
