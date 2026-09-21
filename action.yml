@@ -93,7 +93,11 @@ runs:
       # file had several, this step would verify one image and the build would
       # pin a different one, so an unverified base would ship with cosign and
       # slsa-verifier both green.
-      mapfile -t FROMS < <(grep -E '^FROM\s+' "${CONTAINERFILE}" | grep -vE '\bscratch\b')
+      # -i and a leading-space allowance: Containerfile instructions are
+      # case-insensitive and may be indented, so `from` or `  FROM` on the
+      # first stage would hide it from the single-stage guard below and leave
+      # the loophole this guard closes wide open.
+      mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}" | grep -viE '\bscratch\b')
       if [ "${#FROMS[@]}" -eq 0 ]; then
         echo "No base image found to verify" >&2
         exit 1

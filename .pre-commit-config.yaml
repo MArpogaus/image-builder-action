@@ -37,4 +37,4 @@ repos:
     name: actions are pinned to a commit sha
     language: script
     files: ^(\.github/workflows/.*\.ya?ml|action\.yml)$
-    entry: .github/pinned-actions.sh
+    entry: .github/pinned-actions.py
