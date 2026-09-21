@@ -23,7 +23,7 @@ jobs:
       packages: write
       id-token: write
       actions: read
-    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@7e52129c98111d7437960159061f3ab0b6fa2f33 # v1.6.0
+    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@v1.6.0
     with:
       image-name: my-cool-app
       containerfile: ./Containerfile
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: MArpogaus/image-builder-action@7e52129c98111d7437960159061f3ab0b6fa2f33 # v1.6.0
+      - uses: MArpogaus/image-builder-action@v1.6.0   # pin to the SHA in your own repo
         with:
           image-name: my-cool-app
           containerfile: ./Containerfile
