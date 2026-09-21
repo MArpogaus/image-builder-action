@@ -70,12 +70,12 @@ runs:
       swap-storage: true
 
   - name: Install slsa-verifier
-    if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
 
+  # Always: the base digest becomes a label, so a caller can tell whether a
+  # rebuild would change anything.
   - name: Install crane and resolve base image
     id: resolve-base
-    if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
     shell: bash
     env:
       CONTAINERFILE: ${{ inputs.containerfile }}
@@ -200,6 +200,8 @@ runs:
         org.opencontainers.image.vendor=${{ github.repository_owner }}
         org.opencontainers.image.url=${{ github.event.repository.html_url }}
         org.opencontainers.image.revision=${{ github.sha }}
+        org.opencontainers.image.base.name=${{ env.BASE_TAG }}
+        org.opencontainers.image.base.digest=${{ env.BASE_DIGEST }}
 
   - name: Build Image
     id: build_image

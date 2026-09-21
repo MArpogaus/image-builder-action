@@ -49,6 +49,10 @@ jobs:
           signing-secret: ${{ secrets.SIGNING_SECRET }}
 ```
 
+Every image carries `org.opencontainers.image.base.name` and
+`org.opencontainers.image.base.digest`. A scheduled workflow can compare the
+digest with the current base image and skip the build when nothing changed.
+
 ## Inputs
 
 | Input                | Description                                                        | Required | Default   |
