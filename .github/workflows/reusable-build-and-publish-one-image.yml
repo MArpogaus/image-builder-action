@@ -55,7 +55,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
+      # No id-token here: this job signs with --key env://, and only the
+      # provenance job below needs an OIDC token.
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1

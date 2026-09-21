@@ -4,12 +4,16 @@ on:
   pull_request:
   push:
     branches: [main, dev]
+  # No branch filter on the trigger, so the publishing jobs below gate on the
+  # ref instead: a dispatch against any branch would otherwise publish and sign
+  # with the real key.
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   build-basic:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     permissions:
       contents: read
       actions: read
@@ -29,11 +33,11 @@ jobs:
   # reusable workflow pins the action by SHA for consumers, so a job that went
   # through it would test the last released action instead of this one.
   build-derived:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      id-token: write
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1     # v7.0.1
     - uses: ./
@@ -49,7 +53,9 @@ jobs:
 
   test-slsa:
     needs: [build-basic]
-    if: github.event_name != 'pull_request'
+    if: >-
+      github.event_name != 'pull_request'
+      && (github.ref_name == 'main' || github.ref_name == 'dev')
     permissions:
       contents: read
       actions: read
@@ -69,11 +75,11 @@ jobs:
 
   # `uses: ./`, for the same reason as build-derived.
   build-overwrite-tag:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-      id-token: write
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1     # v7.0.1
     - uses: ./
