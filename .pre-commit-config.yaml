@@ -30,3 +30,11 @@ repos:
     stages: [commit-msg]
   - id: commitizen-branch
     stages: [pre-push]
+
+- repo: local
+  hooks:
+  - id: pinned-actions
+    name: actions are pinned to a commit sha
+    language: script
+    files: ^(\.github/workflows/.*\.ya?ml|action\.yml)$
+    entry: .github/pinned-actions.sh

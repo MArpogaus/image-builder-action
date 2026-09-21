@@ -7,6 +7,13 @@ on:
   # No branch filter on the trigger, so the publishing jobs below gate on the
   # ref instead: a dispatch against any branch would otherwise publish and sign
   # with the real key.
+  #
+  # The jobs that a pull request reaches get an empty signing key, not the real
+  # one. They run the action from the pull request's own head (`uses: ./`, and
+  # a reusable workflow also resolves against that ref), so the `if:` that
+  # holds the signing step back lives in a file the pull request can edit. A
+  # branch in this repository carries the repository's secrets, so this is the
+  # only gate that a pull request cannot move.
   workflow_dispatch:
 
 permissions: {}
@@ -27,7 +34,7 @@ jobs:
       platform: linux/amd64
       free-disk-space: false
     secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+      SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
   # `uses: ./` so this job runs the action as it is in this commit. The
   # reusable workflow pins the action by SHA for consumers, so a job that went
@@ -49,7 +56,7 @@ jobs:
         build-args: BASE_IMAGE=ghcr.io/ublue-os/arch-toolbox:latest
         cosign-public-key: https://raw.githubusercontent.com/ublue-os/main/main/cosign.pub
         free-disk-space: false
-        signing-secret: ${{ secrets.SIGNING_SECRET }}
+        signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
   test-slsa:
     needs: [build-basic]
@@ -71,7 +78,7 @@ jobs:
       slsa-verify-source: github.com/MArpogaus/image-builder-action
       free-disk-space: false
     secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+      SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
   # `uses: ./`, for the same reason as build-derived.
   build-overwrite-tag:
@@ -90,4 +97,4 @@ jobs:
         platform: linux/amd64
         overwrite-ref-tag: test
         free-disk-space: false
-        signing-secret: ${{ secrets.SIGNING_SECRET }}
+        signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}

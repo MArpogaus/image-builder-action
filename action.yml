@@ -188,6 +188,12 @@ runs:
     id: build_image
     uses: redhat-actions/buildah-build@719e3c40d8af9790c23eca13f7daa339f2867034   # v3.1.0
     with:
+      # --from pins the base to the digest that cosign and slsa-verifier just
+      # verified. The FROM line names a tag, which buildah resolves again on
+      # its own, so without this the build can take a different image than the
+      # one the verification passed on, and the base.digest label then records
+      # the verified digest rather than the built one.
+      extra-args: --from ${{ env.BASE_TAG }}@${{ env.BASE_DIGEST }}
       containerfiles: ${{ inputs.containerfile }}
       context: ${{ inputs.context }}
       platforms: ${{ inputs.platform }}
