@@ -103,7 +103,9 @@ runs:
         --source-tag "${CRANE_VERSION}"
       tar -zxvf go-containerregistry.tar.gz -C /usr/local/bin/ crane
 
-      # Find the last non-scratch FROM to get the base image
+      # The last non-scratch FROM is the base image. A multi-stage file whose
+      # final stage is `FROM builder` hands a stage name to crane; name the
+      # real base in that stage instead, or do not use this action for it.
       RAW_BASE=$(grep -E '^FROM\s+' "${CONTAINERFILE}" | grep -vE '\bscratch\b' | tail -1 | awk '{print $2}')
       if [ -z "$RAW_BASE" ]; then
         echo "No base image found to verify" >&2

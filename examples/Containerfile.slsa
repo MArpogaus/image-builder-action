@@ -1,2 +1,2 @@
-FROM ghcr.io/marpogaus/test-basic:dev
+FROM ghcr.io/marpogaus/test-basic:latest
 RUN echo "slsa-verified build" > /slsa.txt

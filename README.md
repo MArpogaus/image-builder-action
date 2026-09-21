@@ -65,6 +65,11 @@ digest with the current base image and skip the build when nothing changed.
 | `registry`           | The registry to push to (not exposed by the reusable workflow)     | No       | `ghcr.io/<owner>` |
 | `slsa-verify-source` | Source URI for SLSA verification of the base image                 | No       | `''`      |
 | `cosign-public-key`  | Public key, or a URL to one, to verify the base image's signature  | No       | `''`      |
+
+The base image is the last non-`scratch` `FROM` in the Containerfile. A
+multi-stage build whose final stage starts from an earlier stage would hand a
+stage name to the digest lookup, so this action expects the final `FROM` to
+name a real image.
 | `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |
 | `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `true`    |
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
@@ -88,7 +93,9 @@ signing and verification, which fails as "no signatures found".
 ## Security
 
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
-  own tag and refuses a digest ref.
+  own tag and refuses a digest ref. `pinact run` re-pins them; `.pinact.yaml`
+  holds the rule that leaves the SLSA generator on its tag. It is not a
+  pre-commit hook because pinact ships no hook manifest.
 - The SLSA generator signs provenance keyless through GitHub OIDC; images are
   signed with `SIGNING_SECRET`.
 - `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature did
