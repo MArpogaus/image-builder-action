@@ -88,14 +88,23 @@ runs:
     run: |
       set -exuo pipefail
 
-      # The last non-scratch FROM is the base image. A multi-stage file whose
-      # final stage is `FROM builder` hands a stage name to skopeo; name the
-      # real base in that stage instead, or do not use this action for it.
-      RAW_BASE=$(grep -E '^FROM\s+' "${CONTAINERFILE}" | grep -vE '\bscratch\b' | tail -1 | awk '{print $2}')
-      if [ -z "$RAW_BASE" ]; then
+      # Single-stage only, and the check is not cosmetic. The build pins the
+      # base with `buildah --from`, which replaces the FIRST FROM alone. If a
+      # file had several, this step would verify one image and the build would
+      # pin a different one, so an unverified base would ship with cosign and
+      # slsa-verifier both green.
+      mapfile -t FROMS < <(grep -E '^FROM\s+' "${CONTAINERFILE}" | grep -vE '\bscratch\b')
+      if [ "${#FROMS[@]}" -eq 0 ]; then
         echo "No base image found to verify" >&2
         exit 1
       fi
+      if [ "${#FROMS[@]}" -gt 1 ]; then
+        echo "${CONTAINERFILE} has ${#FROMS[@]} non-scratch FROM lines." >&2
+        echo "This action pins the base by digest with 'buildah --from', which" >&2
+        echo "replaces the first FROM only, so it supports single-stage files." >&2
+        exit 1
+      fi
+      RAW_BASE=$(awk '{print $2}' <<<"${FROMS[0]}")
 
       if [ -n "${BUILD_ARGS}" ]; then
         while IFS='=' read -r key value; do
