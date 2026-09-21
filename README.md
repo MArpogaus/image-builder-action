@@ -88,8 +88,11 @@ digest lookup fails on the literal `${BASE}`.
 
 `overwrite-ref-tag` exists so a matrix can publish `:31`, `:32` and so on from
 one file. Set `latest-tag` only for the highest version, otherwise `:latest`
-is whichever job finished last. Run the matrix with `max-parallel: 1`: two jobs
-publishing `:latest` at once race for which digest the tag ends up on.
+is whichever job finished last. Two jobs publishing the same tag at once race
+for which digest it ends up on, so `max-parallel: 1` is needed only when more
+than one matrix entry can publish one: with `latest-tag` on a single entry and
+a distinct `overwrite-ref-tag` per entry, the tag sets are disjoint and the
+matrix can run in parallel.
 
 ## Security
 

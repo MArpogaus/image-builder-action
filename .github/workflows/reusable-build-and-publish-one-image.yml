@@ -13,7 +13,8 @@ on:
         required: true
       context:
         type: string
-        required: true
+        required: false
+        default: .   # as in the composite action, so a caller may omit it
       platform:
         type: string
         required: true
