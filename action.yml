@@ -89,26 +89,38 @@ runs:
       set -exuo pipefail
 
       # Single-stage only, and the check is not cosmetic. The build pins the
-      # base with `buildah --from`, which replaces the FIRST FROM alone. If a
-      # file had several, this step would verify one image and the build would
-      # pin a different one, so an unverified base would ship with cosign and
-      # slsa-verifier both green.
-      # -i and a leading-space allowance: Containerfile instructions are
-      # case-insensitive and may be indented, so `from` or `  FROM` on the
-      # first stage would hide it from the single-stage guard below and leave
-      # the loophole this guard closes wide open.
-      mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}" | grep -viE '\bscratch\b')
+      # base with `buildah --from`, which replaces the FIRST FROM alone, so a
+      # file with several stages would have one image verified and a different
+      # one built: an unverified base shipping with cosign and slsa-verifier
+      # both green.
+      #
+      # Every FROM counts, including `FROM scratch`. Filtering scratch out of
+      # the count was a hole of its own, twice over: `grep -v scratch` matched
+      # the whole line, so the word anywhere on it (a trailing comment, a stage
+      # named scratch, an image called scratch-base) deleted that stage from
+      # the count; and a real `FROM scratch` first stage let the pin land on
+      # the scratch line while the true base stayed on a tag.
+      #
+      # -i and the leading-space allowance: Containerfile instructions are
+      # case-insensitive and may be indented.
+      mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}")
       if [ "${#FROMS[@]}" -eq 0 ]; then
         echo "No base image found to verify" >&2
         exit 1
       fi
       if [ "${#FROMS[@]}" -gt 1 ]; then
-        echo "${CONTAINERFILE} has ${#FROMS[@]} non-scratch FROM lines." >&2
+        echo "${CONTAINERFILE} has ${#FROMS[@]} FROM lines." >&2
         echo "This action pins the base by digest with 'buildah --from', which" >&2
         echo "replaces the first FROM only, so it supports single-stage files." >&2
         exit 1
       fi
-      RAW_BASE=$(awk '{print $2}' <<<"${FROMS[0]}")
+      # Skip the FROM keyword and any --flag=value, so `FROM --platform=x img`
+      # yields the image and not the flag.
+      RAW_BASE=$(awk '{ for (i = 2; i <= NF; i++) if ($i !~ /^--/) { print $i; exit } }' <<<"${FROMS[0]}")
+      if [ -z "${RAW_BASE}" ] || [ "${RAW_BASE}" = "scratch" ]; then
+        echo "Cannot verify a base of '${RAW_BASE:-<none>}' in ${CONTAINERFILE}." >&2
+        exit 1
+      fi
 
       if [ -n "${BUILD_ARGS}" ]; then
         while IFS='=' read -r key value; do
