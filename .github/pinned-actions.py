@@ -41,6 +41,9 @@ for path in sys.argv[1:]:
     try:
         with open(path, encoding="utf-8") as handle:
             documents = list(yaml.safe_load_all(handle))
+    except RecursionError:
+        bad.append(f"{path}: cannot parse: nested too deeply")
+        continue
     except (OSError, UnicodeDecodeError, yaml.YAMLError) as error:
         bad.append(f"{path}: cannot parse: {error}")
         continue

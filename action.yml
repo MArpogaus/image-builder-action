@@ -103,20 +103,32 @@ runs:
       #
       # -i and the leading-space allowance: Containerfile instructions are
       # case-insensitive and may be indented.
+      #
+      # Deliberately permissive: anything that opens like FROM counts. A
+      # stricter shape (flags, image, optional `AS name`, nothing else) reads
+      # better and is wrong here, because a FROM line carrying trailing junk
+      # then stops being counted and a second stage goes unseen, which is the
+      # exact hole this guard exists to close. Over-counting only ever refuses
+      # a build; under-counting ships an unverified base.
       mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}")
       if [ "${#FROMS[@]}" -eq 0 ]; then
         echo "No base image found to verify" >&2
         exit 1
       fi
       if [ "${#FROMS[@]}" -gt 1 ]; then
-        echo "${CONTAINERFILE} has ${#FROMS[@]} FROM lines." >&2
+        echo "${CONTAINERFILE} has ${#FROMS[@]} lines that open with FROM:" >&2
+        printf '  %s\n' "${FROMS[@]}" >&2
         echo "This action pins the base by digest with 'buildah --from', which" >&2
         echo "replaces the first FROM only, so it supports single-stage files." >&2
+        echo "A line inside a RUN heredoc that begins with 'from' counts too;" >&2
+        echo "indent it or reword it." >&2
         exit 1
       fi
       # Skip the FROM keyword and any --flag=value, so `FROM --platform=x img`
       # yields the image and not the flag.
-      RAW_BASE=$(awk '{ for (i = 2; i <= NF; i++) if ($i !~ /^--/) { print $i; exit } }' <<<"${FROMS[0]}")
+      # sub() strips a CR so a CRLF Containerfile does not carry it into the
+      # image reference and fail later inside skopeo with an unrelated error.
+      RAW_BASE=$(awk '{ sub(/\r$/, ""); for (i = 2; i <= NF; i++) if ($i !~ /^--/) { print $i; exit } }' <<<"${FROMS[0]}")
       if [ -z "${RAW_BASE}" ] || [ "${RAW_BASE}" = "scratch" ]; then
         echo "Cannot verify a base of '${RAW_BASE:-<none>}' in ${CONTAINERFILE}." >&2
         exit 1
