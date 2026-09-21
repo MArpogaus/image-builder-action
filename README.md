@@ -93,6 +93,13 @@ publishing `:latest` at once race for which digest the tag ends up on.
 
 ## Security
 
+- The reusable workflow pins this repo's own action by SHA, because a relative
+  ref inside a reusable workflow resolves against the caller's checkout. Bump
+  that pin before a release tag, or a consumer gets a workflow that calls an
+  older action than the tag it took. `build-derived` and `build-overwrite-tag`
+  call the action with `uses: ./` so the tree in a commit is exercised by its
+  own CI; they get no SLSA provenance, which `build-basic` and `test-slsa`
+  cover through the reusable workflow.
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
   own tag and refuses a digest ref. `pinact run` re-pins them; `.pinact.yaml`
   holds the rule that leaves the SLSA generator on its tag. It is not a
