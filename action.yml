@@ -45,6 +45,10 @@ inputs:
     description: Replace {{branch}} in auto-generated tags with this value (e.g., '31' → ':31', ':31-<sha>')
     required: false
     default: ''
+  latest-tag:
+    description: Also publish :latest from the default branch. A version matrix sets it for its highest version only
+    required: false
+    default: 'true'
 
 outputs:
   full-image-ref:
@@ -160,7 +164,7 @@ runs:
       type=ref,event=pr
       type=semver,pattern={{version}}
       type=semver,pattern={{major}}.{{minor}}
-      type=raw,value=latest,enable={{is_default_branch}}
+      type=raw,value=latest,enable=${{ inputs.latest-tag == 'true' && github.ref_name == github.event.repository.default_branch }}
       type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
       type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name != 'pull_request' }}
       TAGEOF

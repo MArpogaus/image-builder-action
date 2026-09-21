@@ -68,6 +68,7 @@ digest with the current base image and skip the build when nothing changed.
 | `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |
 | `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `true`    |
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
+| `latest-tag`         | Also publish `:latest` from the default branch; a matrix sets it for its highest version only | No | `true` |
 
 ## Outputs
 
@@ -79,9 +80,10 @@ digest with the current base image and skip the build when nothing changed.
 ### Building several versions from one Containerfile
 
 `overwrite-ref-tag` exists so a matrix can publish `:31`, `:32` and so on from
-one file. Run the matrix with `max-parallel: 1`: every job also publishes
-`latest`, and in parallel they overwrite each other's digest between signing
-and verification, which fails as "no signatures found".
+one file. Set `latest-tag` only for the highest version, otherwise `:latest`
+is whichever job finished last. Run the matrix with `max-parallel: 1`: jobs
+that publish the same tag in parallel overwrite each other's digest between
+signing and verification, which fails as "no signatures found".
 
 ## Security
 
