@@ -102,8 +102,8 @@ signing and verification, which fails as "no signatures found".
   so it is trusted exactly as much as the runner's `buildah` and `curl`. The
   digest is a label, not a gate: the gates are `cosign-public-key` and
   `slsa-verify-source`, and `slsa-verifier` is installed only when one is set.
-- `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature did
-  not reach GHCR and `cosign verify` failed with "no signatures found".
+- `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature does
+  not reach GHCR and `cosign verify` fails with "no signatures found".
   Dependabot ignores v4 in `.github/dependabot.yml`.
 
 ## Development
