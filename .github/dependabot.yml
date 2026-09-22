@@ -10,9 +10,12 @@ updates:
       patterns: ['*']
   ignore:
   # v4 does not push the signature to GHCR, so `cosign verify` fails with
-  # "no signatures found". Revisit only with a working end-to-end test.
+  # "no signatures found". Held at the exact version rather than below v4: the
+  # group above matches every action, so any other bound still lets a weekly
+  # pull request move cosign inside the v3 line. Revisit only with a working
+  # end-to-end test.
   - dependency-name: sigstore/cosign-installer
-    versions: ['>=4']
+    versions: ['>3.10.1']
 
 - package-ecosystem: pre-commit
   directory: /

@@ -3,9 +3,21 @@
 version: 3
 
 rules:
-# The SLSA generator must be referenced by semver tag, not by commit SHA: the
-# reusable workflow resolves its own source from the tag when it builds the
-# provenance, and a SHA reference breaks verification.
+# This repository pins itself at the commit a release will carry, which is not
+# a tag until the release happens. README.md, "Security", says why the pin is a
+# SHA rather than `./`.
+- ignore: true
+  conditions:
+  - expr: |
+      ActionName matches "^MArpogaus/image-builder-action"
+# cosign-installer stays on its v3 line: with v4 the signature does not reach
+# GHCR and `cosign verify` fails. README.md, "Security", has the rest.
+- ignore: true
+  conditions:
+  - expr: |
+      ActionName == "sigstore/cosign-installer"
+# SLSA generator: tag, not SHA; see the provenance job in
+# reusable-build-and-publish-one-image.yml.
 - ignore: true
   conditions:
   - expr: |

@@ -13,7 +13,8 @@ on:
         required: true
       context:
         type: string
-        required: true
+        required: false
+        default: .   # as in the composite action, so a caller may omit it
       platform:
         type: string
         required: true
@@ -37,6 +38,10 @@ on:
         type: string
         required: false
         default: ''
+      latest-tag:
+        type: boolean
+        required: false
+        default: true
     secrets:
       SIGNING_SECRET:
         required: true
@@ -50,7 +55,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-      id-token: write
+      # No id-token here: this job signs with --key env://, and only the
+      # provenance job below needs an OIDC token.
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
@@ -60,7 +66,7 @@ jobs:
       # Pinned by SHA, not `./`: a relative ref inside a reusable workflow is
       # resolved against the caller's checkout, so a consumer would silently run
       # their own tree instead of this action.
-      uses: MArpogaus/image-builder-action@8605092afc0101efc6ed40ef3a8ea61094ef2c1e
+      uses: MArpogaus/image-builder-action@8df2a685716390f2dd6dc28295071facc391693d
       with:
         image-name: ${{ inputs.image-name }}
         containerfile: ${{ inputs.containerfile }}
@@ -71,6 +77,7 @@ jobs:
         build-args: ${{ inputs.build-args }}
         free-disk-space: ${{ inputs.free-disk-space }}
         overwrite-ref-tag: ${{ inputs.overwrite-ref-tag }}
+        latest-tag: ${{ inputs.latest-tag }}
         signing-secret: ${{ secrets.SIGNING_SECRET }}
 
   provenance:

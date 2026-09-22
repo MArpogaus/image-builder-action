@@ -4,12 +4,16 @@ on:
   pull_request:
   push:
     branches: [main, dev]
+  # The trigger carries no branch filter, so every publishing job below gates
+  # on the ref. README.md, "Security", says why that is the only gate a pull
+  # request cannot move.
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   build-basic:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     permissions:
       contents: read
       actions: read
@@ -23,29 +27,35 @@ jobs:
       platform: linux/amd64
       free-disk-space: false
     secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+      SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
+  # `uses: ./` so this job runs the action as it is in this commit. The
+  # reusable workflow pins the action by SHA for consumers, so a job that went
+  # through it would test the last released action instead of this one.
   build-derived:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
       packages: write
-      id-token: write
-    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
-    with:
-      image-name: test-derived
-      containerfile: ./examples/Containerfile.derived
-      context: .
-      platform: linux/amd64
-      build-args: BASE_IMAGE=ghcr.io/ublue-os/arch-toolbox:latest
-      cosign-public-key: https://raw.githubusercontent.com/ublue-os/main/main/cosign.pub
-      free-disk-space: false
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1     # v7.0.1
+    - uses: ./
+      with:
+        image-name: test-derived
+        containerfile: ./examples/Containerfile.derived
+        context: .
+        platform: linux/amd64
+        build-args: BASE_IMAGE=ghcr.io/ublue-os/arch-toolbox:latest
+        cosign-public-key: https://raw.githubusercontent.com/ublue-os/main/main/cosign.pub
+        free-disk-space: false
+        signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
   test-slsa:
     needs: [build-basic]
-    if: github.event_name != 'pull_request'
+    if: >-
+      github.event_name != 'pull_request'
+      && (github.ref_name == 'main' || github.ref_name == 'dev')
     permissions:
       contents: read
       actions: read
@@ -57,24 +67,27 @@ jobs:
       containerfile: ./examples/Containerfile.slsa
       context: .
       platform: linux/amd64
+      build-args: BASE_IMAGE=ghcr.io/marpogaus/test-basic:${{ github.ref_name }}
       slsa-verify-source: github.com/MArpogaus/image-builder-action
       free-disk-space: false
     secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+      SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
+  # `uses: ./`, for the same reason as build-derived.
   build-overwrite-tag:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
       packages: write
-      id-token: write
-    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
-    with:
-      image-name: test-overwrite
-      containerfile: ./examples/Containerfile.basic
-      context: .
-      platform: linux/amd64
-      overwrite-ref-tag: test
-      free-disk-space: false
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1     # v7.0.1
+    - uses: ./
+      with:
+        image-name: test-overwrite
+        containerfile: ./examples/Containerfile.basic
+        context: .
+        platform: linux/amd64
+        overwrite-ref-tag: test
+        free-disk-space: false
+        signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}

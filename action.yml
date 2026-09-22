@@ -7,55 +7,48 @@ description: Build, push, and sign container images with SLSA-ready outputs
 inputs:
   image-name:
     description: Name of the image
-    type: string
     required: true
   containerfile:
     description: Path to the Containerfile
-    type: string
     required: true
   context:
     description: Build context directory
-    type: string
     required: false
     default: .
   platform:
     description: Target platform (e.g., linux/amd64)
-    type: string
     required: true
   slsa-verify-source:
     description: Optional source URI for SLSA verification
-    type: string
     required: false
     default: ''
   signing-secret:
     description: The cosign private key for signing
-    type: string
     required: true
   registry:
     description: The registry to push to
-    type: string
     required: false
     default: ghcr.io/${{ github.repository_owner }}
   free-disk-space:
     description: Maximize build space
-    type: bool
     required: false
     default: true
   cosign-public-key:
     description: Public key content or URL to verify the base image cosign signature
-    type: string
     required: false
     default: ''
   build-args:
     description: Build arguments to pass to the container build (newline-separated KEY=VALUE)
-    type: string
     required: false
     default: ''
   overwrite-ref-tag:
     description: Replace {{branch}} in auto-generated tags with this value (e.g., '31' → ':31', ':31-<sha>')
-    type: string
     required: false
     default: ''
+  latest-tag:
+    description: Also publish :latest from the default branch. A version matrix sets it for its highest version only
+    required: false
+    default: 'true'
 
 outputs:
   full-image-ref:
@@ -70,7 +63,7 @@ runs:
   steps:
   - name: Maximize build space
     if: ${{ inputs.free-disk-space == 'true' }}
-    uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be   # v1.3.1
+    uses: jlumbroso/free-disk-space@ceedf095f4ec1a097402bc6bd80831f2e1a6fde6   # v2.0.0
     with:
       tool-cache: true
       android: true
@@ -84,9 +77,10 @@ runs:
     if: ${{ inputs.slsa-verify-source != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
 
-  - name: Install crane and resolve base image
+  # Always: the base digest becomes a label, so a caller can tell whether a
+  # rebuild would change anything.
+  - name: Resolve base image
     id: resolve-base
-    if: ${{ inputs.slsa-verify-source != '' || inputs.cosign-public-key != '' }}
     shell: bash
     env:
       CONTAINERFILE: ${{ inputs.containerfile }}
@@ -94,33 +88,33 @@ runs:
     run: |
       set -exuo pipefail
 
-      # Install crane
-      CRANE_VERSION=v0.20.7
-      CRANE_OS=Linux
-      CRANE_ARCH=x86_64
-      CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
-      CRANE_FILE="go-containerregistry_${CRANE_OS}_${CRANE_ARCH}.tar.gz"
-      curl -fLsS --retry 5 \
-        -o 'go-containerregistry.tar.gz' \
-        "${CRANE_BASE}/${CRANE_VERSION}/${CRANE_FILE}" \
-        -o 'provenance.intoto.jsonl' \
-        "${CRANE_BASE}/${CRANE_VERSION}/multiple.intoto.jsonl"
-      if command -v slsa-verifier &>/dev/null; then
-        slsa-verifier verify-artifact go-containerregistry.tar.gz \
-          --provenance-path provenance.intoto.jsonl \
-          --source-uri github.com/google/go-containerregistry \
-          --source-tag "${CRANE_VERSION}"
-      fi
-      tar -zxvf go-containerregistry.tar.gz -C /usr/local/bin/ crane
-
-      # Find the last non-scratch FROM to get the base image
-      RAW_BASE=$(grep -E '^FROM\s+' "${CONTAINERFILE}" | grep -vE '\bscratch\b' | tail -1 | awk '{print $2}')
-      if [ -z "$RAW_BASE" ]; then
+      # Single-stage only, and deliberately permissive: over-counting refuses a
+      # build, under-counting ships an unverified base. README.md, "One FROM",
+      # says why.
+      mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}")
+      if [ "${#FROMS[@]}" -eq 0 ]; then
         echo "No base image found to verify" >&2
         exit 1
       fi
+      if [ "${#FROMS[@]}" -gt 1 ]; then
+        echo "${CONTAINERFILE} has ${#FROMS[@]} lines that open with FROM:" >&2
+        printf '  %s\n' "${FROMS[@]}" >&2
+        echo "This action pins the base by digest with 'buildah --from', which" >&2
+        echo "replaces the first FROM only, so it supports single-stage files." >&2
+        echo "A line inside a RUN heredoc that begins with 'from' counts too," >&2
+        echo "whatever its indentation. Reword such a line." >&2
+        exit 1
+      fi
+      # Skip the FROM keyword and any --flag=value, so `FROM --platform=x img`
+      # yields the image and not the flag.
+      # sub() strips a CR so a CRLF Containerfile does not carry it into the
+      # image reference and fail later inside skopeo with an unrelated error.
+      RAW_BASE=$(awk '{ sub(/\r$/, ""); for (i = 2; i <= NF; i++) if ($i !~ /^--/) { print $i; exit } }' <<<"${FROMS[0]}")
+      if [ -z "${RAW_BASE}" ] || [ "${RAW_BASE}" = "scratch" ]; then
+        echo "Cannot verify a base of '${RAW_BASE:-<none>}' in ${CONTAINERFILE}." >&2
+        exit 1
+      fi
 
-      # Resolve build args in FROM (e.g., ${BASE_IMAGE} or $BASE_IMAGE)
       if [ -n "${BUILD_ARGS}" ]; then
         while IFS='=' read -r key value; do
           [ -z "$key" ] && continue
@@ -129,17 +123,15 @@ runs:
         done <<< "${BUILD_ARGS}"
       fi
 
-      # Resolve immutable digest and persist for downstream steps
-      DIGEST=$(crane digest "${RAW_BASE}")
+      # skopeo ships in the runner image.
+      DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${RAW_BASE}")
       echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
       echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
 
   - name: Install cosign
     if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
-    # Pinned to v3 deliberately: v4 does not push the signature to GHCR, so
-    # verification fails with "no signatures found". Dependabot is told to
-    # leave this alone in .github/dependabot.yml.
-    uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+    # v3 line on purpose; see .github/dependabot.yml.
+    uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
   - name: Cosign verify base image
     if: ${{ inputs.cosign-public-key != '' }}
@@ -172,37 +164,28 @@ runs:
     env:
       OVERWRITE_REF_TAG: ${{ inputs.overwrite-ref-tag }}
     run: |
-      TAGS=$(
-      cat <<-'TAGEOF'
-      type=ref,event=branch
-      type=ref,event=pr
-      type=semver,pattern={{version}}
-      type=semver,pattern={{major}}.{{minor}}
-      type=raw,value=latest,enable={{is_default_branch}}
-      type=raw,value={{branch}}-{{sha}},enable=${{ github.event_name != 'pull_request' }}
-      type=raw,value={{branch}}-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name != 'pull_request' }}
-      TAGEOF
-      )
+      set -euo pipefail
 
-      ORT="${OVERWRITE_REF_TAG}"
-      if [ -n "${ORT}" ]; then
-        TAGS=$(echo "${TAGS}" \
-          | sed "s|type=ref,event=branch|type=raw,value=${ORT}|" \
-          | sed "s/{{branch}}/${ORT}/g")
+      # Without overwrite-ref-tag the branch names the image; with it, the
+      # caller's value does, in both the ref tag and the dated ones.
+      REF="type=ref,event=branch"
+      NAME="{{branch}}"
+      if [ -n "${OVERWRITE_REF_TAG}" ]; then
+        REF="type=raw,value=${OVERWRITE_REF_TAG}"
+        NAME="${OVERWRITE_REF_TAG}"
       fi
 
-      delimiter="TAGS_EOF_$(date +%s)"
       {
-        echo "tags<<${delimiter}"
-        echo "${TAGS}"
-        echo "${delimiter}"
+        echo 'tags<<TAGEOF'
+        echo "${REF}"
+        echo 'type=ref,event=pr'
+        echo 'type=semver,pattern={{version}}'
+        echo 'type=semver,pattern={{major}}.{{minor}}'
+        echo "type=raw,value=latest,enable=${{ inputs.latest-tag == 'true' && github.ref_name == github.event.repository.default_branch }}"
+        echo "type=raw,value=${NAME}-{{sha}},enable=${{ github.event_name != 'pull_request' }}"
+        echo "type=raw,value=${NAME}-{{date 'YYYYMMDD-HHmmss'}},enable=${{ github.event_name != 'pull_request' }}"
+        echo 'TAGEOF'
       } >> "${GITHUB_OUTPUT}"
-
-  - name: Cache podman
-    uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
-    with:
-      path: ~/.local/share/containers
-      key: podman
 
   - name: Extract metadata (tags, labels) for Docker
     id: meta
@@ -216,11 +199,19 @@ runs:
         org.opencontainers.image.vendor=${{ github.repository_owner }}
         org.opencontainers.image.url=${{ github.event.repository.html_url }}
         org.opencontainers.image.revision=${{ github.sha }}
+        org.opencontainers.image.base.name=${{ env.BASE_TAG }}
+        org.opencontainers.image.base.digest=${{ env.BASE_DIGEST }}
 
   - name: Build Image
     id: build_image
     uses: redhat-actions/buildah-build@719e3c40d8af9790c23eca13f7daa339f2867034   # v3.1.0
     with:
+      # --from pins the base to the digest that cosign and slsa-verifier just
+      # verified. The FROM line names a tag, which buildah resolves again on
+      # its own, so without this the build can take a different image than the
+      # one the verification passed on, and the base.digest label then records
+      # the verified digest rather than the built one.
+      extra-args: --from ${{ env.BASE_TAG }}@${{ env.BASE_DIGEST }}
       containerfiles: ${{ inputs.containerfile }}
       context: ${{ inputs.context }}
       platforms: ${{ inputs.platform }}
@@ -260,27 +251,20 @@ runs:
     run: |
       set -exuo pipefail
 
-      images=""
-      for tag in $(echo "${TAGS}"); do
-        images+="${tag}@${DIGEST} "
-      done
-      cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY ${images}
+      # One signature per digest, not per tag: every tag this job pushed points
+      # at the same digest, and cosign stores the signature under the digest.
+      cosign sign --yes --recursive --key env://COSIGN_PRIVATE_KEY \
+        "${TAGS%%$'\n'*}@${DIGEST}"
 
   - name: Verify container image
     if: github.event_name != 'pull_request'
     shell: bash
     env:
       TAGS: ${{ steps.meta.outputs.tags }}
+      DIGEST: ${{ steps.push.outputs.digest }}
     run: |
       set -exuo pipefail
 
-      images=""
-      for tag in $(echo "${TAGS}"); do
-        images+="${tag} "
-      done
-      cosign verify --key cosign.pub ${images}
-
-  - name: Echo outputs
-    shell: bash
-    run: |
-      echo "${{ toJSON(steps.push.outputs) }}"
+      # By digest, so a tag another job moved in between cannot fail this.
+      # The caller's checkout must hold the public key that matches signing-secret.
+      cosign verify --key cosign.pub "${TAGS%%$'\n'*}@${DIGEST}"

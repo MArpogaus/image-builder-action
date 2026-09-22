@@ -6,8 +6,6 @@ repos:
   - id: check-executables-have-shebangs
   - id: check-merge-conflict
   - id: check-shebang-scripts-are-executable
-        # A .j2 shebang belongs to the rendered file, not to the template
-    exclude: \.j2$
   - id: check-yaml
     args: [--allow-multiple-documents]
   - id: end-of-file-fixer
@@ -26,9 +24,18 @@ repos:
     args: [--autofix, --indent, '2']
 
 - repo: https://github.com/commitizen-tools/commitizen
-  rev: v4.18.0
+  rev: v4.18.1
   hooks:
   - id: commitizen
     stages: [commit-msg]
   - id: commitizen-branch
     stages: [pre-push]
+
+- repo: local
+  hooks:
+  - id: pinned-actions
+    name: actions are pinned to a commit sha
+    language: python
+    additional_dependencies: [PyYAML]
+    files: ^(\.github/workflows/.*\.ya?ml|action\.yml)$
+    entry: .github/pinned-actions.py

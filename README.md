@@ -3,24 +3,17 @@
 [![Build and publish](https://github.com/MArpogaus/image-builder-action/actions/workflows/build-and-publish.yml/badge.svg)](https://github.com/MArpogaus/image-builder-action/actions/workflows/build-and-publish.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A GitHub Action that builds, pushes and signs container images with SLSA Level 3 provenance.
+Composite action: build with buildah, push, sign with cosign, verify.
+Reusable workflow: the same, plus SLSA level 3 provenance. Optional
+verification of the base image by cosign key or SLSA source. Podman layers are
+cached between runs, and tags and labels come from the Git event.
 
-## Features
+## Usage
 
-- **Two entry points**: a **Composite Action** (build and push) or a **Reusable Workflow** (the full SLSA chain).
-- **Multi-platform support**: Build for `linux/amd64`, `linux/arm64`, etc.
-- **SLSA Provenance**: Generates SLSA Level 3 provenance attestations.
-- **Cosign Signing**: Signs images with a provided private key.
-- **Base Image Verification**: Optionally verifies the provenance of the base image.
-- **Disk Optimization**: Maximizes available disk space for large builds.
-- **Caching**: Caches Podman layers.
-- **Automatic Metadata**: Generates Docker labels and tags based on Git events.
+Commit the public key that matches `SIGNING_SECRET` as `cosign.pub` in the
+repository root. The verify step reads it from the checkout.
 
----
-
-## Usage Option 1: Reusable Workflow (Recommended)
-
-This is the most secure way to build images, as it automatically generates **SLSA Level 3 provenance**.
+The reusable workflow builds, signs and attaches SLSA provenance:
 
 ```yaml
 jobs:
@@ -30,7 +23,7 @@ jobs:
       packages: write
       id-token: write
       actions: read
-    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@v1.5.2
+    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@v1.6.0
     with:
       image-name: my-cool-app
       containerfile: ./Containerfile
@@ -39,17 +32,16 @@ jobs:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 ```
 
-## Usage Option 2: Composite Action
-
-Use this if you want to integrate the build/push logic into your own existing job. Note that this **does not** generate SLSA provenance on its own.
+The composite action fits into an existing job. It produces no SLSA provenance
+on its own.
 
 ```yaml
 jobs:
   my-job:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: MArpogaus/image-builder-action@main
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: MArpogaus/image-builder-action@v1.6.0   # pin to the SHA in your own repo
         with:
           image-name: my-cool-app
           containerfile: ./Containerfile
@@ -57,7 +49,9 @@ jobs:
           signing-secret: ${{ secrets.SIGNING_SECRET }}
 ```
 
----
+Every image carries `org.opencontainers.image.base.name` and
+`org.opencontainers.image.base.digest`. A scheduled workflow can compare the
+digest with the current base image and skip the build when nothing changed.
 
 ## Inputs
 
@@ -68,12 +62,19 @@ jobs:
 | `platform`           | Target platform (e.g. `linux/amd64`)                               | **Yes**  | -         |
 | `signing-secret`     | The cosign private key. A secret named `SIGNING_SECRET` for the reusable workflow | **Yes** | - |
 | `context`            | Build context directory                                            | No       | `.`       |
-| `registry`           | The registry to push to                                            | No       | `ghcr.io` |
+| `registry`           | The registry to push to (not exposed by the reusable workflow)     | No       | `ghcr.io/<owner>` |
 | `slsa-verify-source` | Source URI for SLSA verification of the base image                 | No       | `''`      |
 | `cosign-public-key`  | Public key, or a URL to one, to verify the base image's signature  | No       | `''`      |
 | `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |
-| `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `false`   |
+| `free-disk-space`    | Maximize build space by removing preinstalled tooling              | No       | `true`    |
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
+| `latest-tag`         | Also publish `:latest` from the default branch; a matrix sets it for its highest version only | No | `true` |
+
+The base image is the one `FROM` in the Containerfile. The file must name a
+real image there. A multi-stage file and a `FROM scratch` are both refused.
+A `FROM ${BASE}` is resolved from `build-args` alone. Give the same value
+there even when the Containerfile has an `ARG` default. Without it the digest
+lookup fails on the literal `${BASE}`.
 
 ## Outputs
 
@@ -85,28 +86,64 @@ jobs:
 ### Building several versions from one Containerfile
 
 `overwrite-ref-tag` exists so a matrix can publish `:31`, `:32` and so on from
-one file. Run the matrix with `max-parallel: 1`: every job also publishes
-`latest`, and in parallel they overwrite each other's digest between signing
-and verification, which fails as "no signatures found".
+one file. Set `latest-tag` only for the highest version. Otherwise `:latest` is
+whichever job finished last. Two jobs that publish one tag at once race for its
+digest. Set `max-parallel: 1` only when more than one matrix entry can publish
+the same tag. One entry with `latest-tag` and a distinct `overwrite-ref-tag`
+per entry make the tag sets disjoint, and the matrix can run in parallel.
 
 ## Security
 
-This action is designed with security in mind:
-- **Immutable Actions**: It uses hashes for most actions to prevent supply chain attacks.
-- **SLSA Level 3**: Provides the highest level of build integrity for GitHub Actions.
-- **OIDC**: Uses GitHub OIDC for signing and provenance.
+- The reusable workflow pins this repo's own action by SHA, because a relative
+  ref inside a reusable workflow resolves against the caller's checkout. Bump
+  that pin before a release tag, or a consumer gets a workflow that calls an
+  older action than the tag it took. `build-derived` and `build-overwrite-tag` call the action with `uses: ./`, so a
+commit's own tree is exercised by its CI. They get no SLSA provenance. `build-
+basic` and `test-slsa` cover that through the reusable workflow.
+- Every action is pinned to a SHA except the SLSA generator, which verifies its
+  own tag and refuses a digest ref. `pinact run` re-pins them. `.pinact.yaml`
+  holds the rule that leaves the SLSA generator on its tag. It is not a
+  pre-commit hook because pinact ships no hook manifest.
+- The SLSA generator signs provenance keyless through GitHub OIDC. Images are
+  signed with `SIGNING_SECRET`.
+- A pull request reaches the build jobs with an empty signing key. Those jobs
+  run the action from the pull request's own head. The `if:` that holds the
+  signing step back therefore sits in a file the pull request can edit. Only a
+  branch in this repository carries the repository's secrets, so the ref is the
+  gate.
+- The base image digest is read with `skopeo`. That tool ships in the runner
+  image, so it is trusted as much as the runner's `buildah` and `curl`. The
+  digest is a label, not a gate: the gates are `cosign-public-key` and
+  `slsa-verify-source`, and `slsa-verifier` is installed only when one is set.
+- `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature does
+  not reach GHCR and `cosign verify` fails with "no signatures found".
+  Dependabot ignores v4 in `.github/dependabot.yml`.
 
 ## Development
+
+Work on `dev`. Conventional commits. Hooks: shellcheck, pretty-format-yaml,
+commitizen. Setup:
 
 ```bash
 pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
 ```
 
-Plain `pre-commit install` wires up only the pre-commit stage, so the
-commitizen message and branch checks stay dormant. Hooks: shellcheck,
-pretty-format-yaml, commitizen for conventional commits.
-CI runs the same set on push and pull request. Actions are pinned to SHAs, and
-dependabot updates actions and hook revisions weekly against `dev`.
+Plain `pre-commit install` wires up the pre-commit stage only, which leaves the
+commit-message and branch hooks dormant. CI runs the same hooks on push and
+pull request. Dependabot updates the actions and the hook revisions weekly
+against `dev`.
+
+## One FROM
+
+The action verifies the base image by digest, then passes that digest to
+`buildah --from`. That flag replaces the first `FROM` alone. In a file with
+several stages the action therefore verifies one image and builds another.
+cosign and slsa-verifier both report green on such a build.
+
+The step refuses a Containerfile with more than one `FROM`. It also refuses a
+single `FROM scratch`, because there is no base to verify. The match is
+deliberately permissive, and anything that opens like `FROM` counts.
+Over-counting refuses a build. Under-counting ships an unverified base.
 
 ## License
 
