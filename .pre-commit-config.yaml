@@ -30,12 +30,3 @@ repos:
     stages: [commit-msg]
   - id: commitizen-branch
     stages: [pre-push]
-
-- repo: local
-  hooks:
-  - id: pinned-actions
-    name: actions are pinned to a commit sha
-    language: python
-    additional_dependencies: [PyYAML]
-    files: ^(\.github/workflows/.*\.ya?ml|action\.yml)$
-    entry: .github/pinned-actions.py

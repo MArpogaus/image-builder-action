@@ -101,9 +101,10 @@ per entry make the tag sets disjoint, and the matrix can run in parallel.
 commit's own tree is exercised by its CI. They get no SLSA provenance. `build-
 basic` and `test-slsa` cover that through the reusable workflow.
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
-  own tag and refuses a digest ref. `pinact run` re-pins them. `.pinact.yaml`
-  holds the rule that leaves the SLSA generator on its tag. It is not a
-  pre-commit hook because pinact ships no hook manifest.
+  own tag and refuses a digest ref. `pinact run -u` updates and re-pins them.
+  `.pinact.yaml` holds the rules that leave the SLSA generator on its tag, hold
+  `cosign-installer` on v3, and skip the self-pin, which carries no tag of its
+  own.
 - The SLSA generator signs provenance keyless through GitHub OIDC. Images are
   signed with `SIGNING_SECRET`.
 - A pull request reaches the build jobs with an empty signing key. Those jobs
