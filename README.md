@@ -70,12 +70,11 @@ digest with the current base image and skip the build when nothing changed.
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
 | `latest-tag`         | Also publish `:latest` from the default branch; a matrix sets it for its highest version only | No | `true` |
 
-The base image is the last non-`scratch` `FROM` in the Containerfile. A
-multi-stage build whose final stage starts from an earlier stage hands a stage
-name to the digest lookup. This action expects the final `FROM` to name a real
-image. A `FROM ${BASE}` is resolved from `build-args` only: give
-the same value there even when the Containerfile has an `ARG` default, or the
-digest lookup fails on the literal `${BASE}`.
+The base image is the one `FROM` in the Containerfile. The file must name a
+real image there. A multi-stage file and a `FROM scratch` are both refused.
+A `FROM ${BASE}` is resolved from `build-args` alone. Give the same value
+there even when the Containerfile has an `ARG` default. Without it the digest
+lookup fails on the literal `${BASE}`.
 
 ## Outputs
 
@@ -87,12 +86,11 @@ digest lookup fails on the literal `${BASE}`.
 ### Building several versions from one Containerfile
 
 `overwrite-ref-tag` exists so a matrix can publish `:31`, `:32` and so on from
-one file. Set `latest-tag` only for the highest version, otherwise `:latest`
-is whichever job finished last. Two jobs publishing the same tag at once race
-for which digest it ends up on, so `max-parallel: 1` is needed only when more
-than one matrix entry can publish one: with `latest-tag` on a single entry and
-a distinct `overwrite-ref-tag` per entry, the tag sets are disjoint and the
-matrix can run in parallel.
+one file. Set `latest-tag` only for the highest version. Otherwise `:latest` is
+whichever job finished last. Two jobs that publish one tag at once race for its
+digest. Set `max-parallel: 1` only when more than one matrix entry can publish
+the same tag. One entry with `latest-tag` and a distinct `overwrite-ref-tag`
+per entry make the tag sets disjoint, and the matrix can run in parallel.
 
 ## Security
 
@@ -103,13 +101,13 @@ matrix can run in parallel.
 commit's own tree is exercised by its CI. They get no SLSA provenance. `build-
 basic` and `test-slsa` cover that through the reusable workflow.
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
-  own tag and refuses a digest ref. `pinact run` re-pins them; `.pinact.yaml`
+  own tag and refuses a digest ref. `pinact run` re-pins them. `.pinact.yaml`
   holds the rule that leaves the SLSA generator on its tag. It is not a
   pre-commit hook because pinact ships no hook manifest.
-- The SLSA generator signs provenance keyless through GitHub OIDC; images are
+- The SLSA generator signs provenance keyless through GitHub OIDC. Images are
   signed with `SIGNING_SECRET`.
-- The base image digest is read with `skopeo`, which ships in the runner image,
-  so it is trusted exactly as much as the runner's `buildah` and `curl`. The
+- The base image digest is read with `skopeo`. That tool ships in the runner
+  image, so it is trusted as much as the runner's `buildah` and `curl`. The
   digest is a label, not a gate: the gates are `cosign-public-key` and
   `slsa-verify-source`, and `slsa-verifier` is installed only when one is set.
 - `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature does
@@ -133,14 +131,14 @@ against `dev`.
 ## One FROM
 
 The action verifies the base image by digest, then passes that digest to
-`buildah --from`. That flag replaces the first `FROM` alone. A file with
-several stages would therefore have one image verified and another one built,
-and cosign and slsa-verifier would both report green.
+`buildah --from`. That flag replaces the first `FROM` alone. In a file with
+several stages the action therefore verifies one image and builds another.
+cosign and slsa-verifier both report green on such a build.
 
-The step refuses a Containerfile with more than one `FROM`, and counts
-`FROM scratch` as one of them. The match is deliberately permissive: anything
-that opens like `FROM` counts. Over-counting refuses a build. Under-counting
-ships an unverified base.
+The step refuses a Containerfile with more than one `FROM`. It also refuses a
+single `FROM scratch`, because there is no base to verify. The match is
+deliberately permissive, and anything that opens like `FROM` counts.
+Over-counting refuses a build. Under-counting ships an unverified base.
 
 ## License
 

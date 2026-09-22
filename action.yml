@@ -101,8 +101,8 @@ runs:
         printf '  %s\n' "${FROMS[@]}" >&2
         echo "This action pins the base by digest with 'buildah --from', which" >&2
         echo "replaces the first FROM only, so it supports single-stage files." >&2
-        echo "A line inside a RUN heredoc that begins with 'from' counts too;" >&2
-        echo "indent it or reword it." >&2
+        echo "A line inside a RUN heredoc that begins with 'from' counts too," >&2
+        echo "whatever its indentation. Reword such a line." >&2
         exit 1
       fi
       # Skip the FROM keyword and any --flag=value, so `FROM --platform=x img`
