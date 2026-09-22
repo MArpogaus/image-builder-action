@@ -102,9 +102,9 @@ commit's own tree is exercised by its CI. They get no SLSA provenance. `build-
 basic` and `test-slsa` cover that through the reusable workflow.
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
   own tag and refuses a digest ref. `pinact run -u` updates and re-pins them.
-  `.pinact.yaml` holds the rules that leave the SLSA generator on its tag, hold
-  `cosign-installer` on v3, and skip the self-pin, which carries no tag of its
-  own.
+  `.pinact.yaml` holds three rules. The SLSA generator stays on its tag,
+  `cosign-installer` stays on v3, and the self-pin is skipped, because it
+  carries no tag of its own.
 - The SLSA generator signs provenance keyless through GitHub OIDC. Images are
   signed with `SIGNING_SECRET`.
 - A pull request reaches the build jobs with an empty signing key. Those jobs
