@@ -3,9 +3,9 @@
 version: 3
 
 rules:
-# This repository pins itself at the commit a release will carry, which is not
-# a tag until the release happens. README.md, "Security", says why the pin is a
-# SHA rather than `./`.
+# The self-pin names the commit the release tag sits on top of, so its version
+# comment can never match a tag object. README.md, "Security", says why the pin
+# is a SHA rather than `./`.
 - ignore: true
   conditions:
   - expr: |
