@@ -2,12 +2,9 @@
 """Every GitHub action must be pinned to a commit sha.
 
 A tag moves, and these workflows hand out a signing key and publish signed
-images. The file is parsed as YAML rather than scanned as text. Three text
-versions of this check leaked bypasses in a row -- a comment whitewashing the
-line, YAML flow style hiding it from a line anchor, then a `#` inside a quoted
-string fooling the comment stripper -- and each fix moved the hole rather than
-closing it. A parser has no such holes: it sees the same `uses` values GitHub
-does, including flow style, quoted keys, anchors, aliases and wrapped values.
+images. Parse the file as YAML, never scan it as text: a parser sees the same
+`uses` values GitHub does, including flow style, quoted keys, anchors, aliases
+and wrapped values. Every text version of this check leaked a bypass.
 """
 
 import re

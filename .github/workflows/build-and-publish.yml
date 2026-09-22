@@ -4,16 +4,9 @@ on:
   pull_request:
   push:
     branches: [main, dev]
-  # No branch filter on the trigger, so the publishing jobs below gate on the
-  # ref instead: a dispatch against any branch would otherwise publish and sign
-  # with the real key.
-  #
-  # The jobs that a pull request reaches get an empty signing key, not the real
-  # one. They run the action from the pull request's own head (`uses: ./`, and
-  # a reusable workflow also resolves against that ref), so the `if:` that
-  # holds the signing step back lives in a file the pull request can edit. A
-  # branch in this repository carries the repository's secrets, so this is the
-  # only gate that a pull request cannot move.
+  # The trigger carries no branch filter, so every publishing job below gates
+  # on the ref. README.md, "Security", says why that is the only gate a pull
+  # request cannot move.
   workflow_dispatch:
 
 permissions: {}

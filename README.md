@@ -106,6 +106,11 @@ basic` and `test-slsa` cover that through the reusable workflow.
   pre-commit hook because pinact ships no hook manifest.
 - The SLSA generator signs provenance keyless through GitHub OIDC. Images are
   signed with `SIGNING_SECRET`.
+- A pull request reaches the build jobs with an empty signing key. Those jobs
+  run the action from the pull request's own head. The `if:` that holds the
+  signing step back therefore sits in a file the pull request can edit. Only a
+  branch in this repository carries the repository's secrets, so the ref is the
+  gate.
 - The base image digest is read with `skopeo`. That tool ships in the runner
   image, so it is trusted as much as the runner's `buildah` and `curl`. The
   digest is a label, not a gate: the gates are `cosign-public-key` and
