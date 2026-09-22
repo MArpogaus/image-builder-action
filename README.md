@@ -71,9 +71,9 @@ digest with the current base image and skip the build when nothing changed.
 | `latest-tag`         | Also publish `:latest` from the default branch; a matrix sets it for its highest version only | No | `true` |
 
 The base image is the last non-`scratch` `FROM` in the Containerfile. A
-multi-stage build whose final stage starts from an earlier stage would hand a
-stage name to the digest lookup, so this action expects the final `FROM` to
-name a real image. A `FROM ${BASE}` is resolved from `build-args` only: give
+multi-stage build whose final stage starts from an earlier stage hands a stage
+name to the digest lookup. This action expects the final `FROM` to name a real
+image. A `FROM ${BASE}` is resolved from `build-args` only: give
 the same value there even when the Containerfile has an `ARG` default, or the
 digest lookup fails on the literal `${BASE}`.
 
@@ -99,10 +99,9 @@ matrix can run in parallel.
 - The reusable workflow pins this repo's own action by SHA, because a relative
   ref inside a reusable workflow resolves against the caller's checkout. Bump
   that pin before a release tag, or a consumer gets a workflow that calls an
-  older action than the tag it took. `build-derived` and `build-overwrite-tag`
-  call the action with `uses: ./` so the tree in a commit is exercised by its
-  own CI; they get no SLSA provenance, which `build-basic` and `test-slsa`
-  cover through the reusable workflow.
+  older action than the tag it took. `build-derived` and `build-overwrite-tag` call the action with `uses: ./`, so a
+commit's own tree is exercised by its CI. They get no SLSA provenance. `build-
+basic` and `test-slsa` cover that through the reusable workflow.
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
   own tag and refuses a digest ref. `pinact run` re-pins them; `.pinact.yaml`
   holds the rule that leaves the SLSA generator on its tag. It is not a
@@ -130,6 +129,18 @@ Plain `pre-commit install` wires up the pre-commit stage only, which leaves the
 commit-message and branch hooks dormant. CI runs the same hooks on push and
 pull request. Dependabot updates the actions and the hook revisions weekly
 against `dev`.
+
+## One FROM
+
+The action verifies the base image by digest, then passes that digest to
+`buildah --from`. That flag replaces the first `FROM` alone. A file with
+several stages would therefore have one image verified and another one built,
+and cosign and slsa-verifier would both report green.
+
+The step refuses a Containerfile with more than one `FROM`, and counts
+`FROM scratch` as one of them. The match is deliberately permissive: anything
+that opens like `FROM` counts. Over-counting refuses a build. Under-counting
+ships an unverified base.
 
 ## License
 

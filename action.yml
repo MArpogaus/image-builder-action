@@ -88,28 +88,9 @@ runs:
     run: |
       set -exuo pipefail
 
-      # Single-stage only, and the check is not cosmetic. The build pins the
-      # base with `buildah --from`, which replaces the FIRST FROM alone, so a
-      # file with several stages would have one image verified and a different
-      # one built: an unverified base shipping with cosign and slsa-verifier
-      # both green.
-      #
-      # Every FROM counts, including `FROM scratch`. Filtering scratch out of
-      # the count was a hole of its own, twice over: `grep -v scratch` matched
-      # the whole line, so the word anywhere on it (a trailing comment, a stage
-      # named scratch, an image called scratch-base) deleted that stage from
-      # the count; and a real `FROM scratch` first stage let the pin land on
-      # the scratch line while the true base stayed on a tag.
-      #
-      # -i and the leading-space allowance: Containerfile instructions are
-      # case-insensitive and may be indented.
-      #
-      # Deliberately permissive: anything that opens like FROM counts. A
-      # stricter shape (flags, image, optional `AS name`, nothing else) reads
-      # better and is wrong here, because a FROM line carrying trailing junk
-      # then stops being counted and a second stage goes unseen, which is the
-      # exact hole this guard exists to close. Over-counting only ever refuses
-      # a build; under-counting ships an unverified base.
+      # Single-stage only, and deliberately permissive: over-counting refuses a
+      # build, under-counting ships an unverified base. README.md, "One FROM",
+      # says why.
       mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}")
       if [ "${#FROMS[@]}" -eq 0 ]; then
         echo "No base image found to verify" >&2
