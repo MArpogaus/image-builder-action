@@ -1,7 +1,3 @@
-# Ansible
-*.retry
-.ansible/
-
 # Editor and OS noise
 *.bak
 *.backup
