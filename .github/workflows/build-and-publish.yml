@@ -51,6 +51,27 @@ jobs:
         free-disk-space: false
         signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
+  # `uses: ./`, for the same reason as build-derived. Covers scratch helper
+  # stages and a base behind them.
+  build-staged:
+    if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1     # v7.0.1
+    - uses: ./
+      with:
+        image-name: test-staged
+        containerfile: ./examples/Containerfile.staged
+        context: .
+        platform: linux/amd64
+        build-args: BASE_IMAGE=ghcr.io/ublue-os/arch-toolbox:latest
+        cosign-public-key: https://raw.githubusercontent.com/ublue-os/main/main/cosign.pub
+        free-disk-space: false
+        signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
+
   test-slsa:
     needs: [build-basic]
     if: >-

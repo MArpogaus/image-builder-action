@@ -1,0 +1,10 @@
+# Multi-stage: a scratch helper stage carries build files, the real base
+# sits behind it. The action verifies and pins every non-scratch FROM and
+# leaves scratch stages alone.
+FROM scratch AS ctx
+COPY examples/Containerfile.staged /payload.txt
+
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY --from=ctx /payload.txt /copied.txt
+RUN --mount=type=bind,from=ctx,target=/ctx cp /ctx/payload.txt /mounted.txt
