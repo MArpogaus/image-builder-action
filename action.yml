@@ -19,7 +19,7 @@ inputs:
     description: Target platform (e.g., linux/amd64)
     required: true
   slsa-verify-source:
-    description: Optional source URI for SLSA verification
+    description: Source URI to SLSA-verify every non-scratch base image
     required: false
     default: ''
   signing-secret:
@@ -34,7 +34,7 @@ inputs:
     required: false
     default: true
   cosign-public-key:
-    description: Public key content or URL to verify the base image cosign signature
+    description: Public key content or URL to cosign-verify every non-scratch base image
     required: false
     default: ''
   build-args:
@@ -77,86 +77,83 @@ runs:
     if: ${{ inputs.slsa-verify-source != '' }}
     uses: slsa-framework/slsa-verifier/actions/installer@ea584f4502babc6f60d9bc799dbbb13c1caa9ee6   # v2.7.1
 
-  # Always: the base digest becomes a label, so a caller can tell whether a
-  # rebuild would change anything.
-  - name: Resolve base image
-    id: resolve-base
-    shell: bash
-    env:
-      CONTAINERFILE: ${{ inputs.containerfile }}
-      BUILD_ARGS: ${{ inputs.build-args }}
-    run: |
-      set -exuo pipefail
-
-      # Single-stage only, and deliberately permissive: over-counting refuses a
-      # build, under-counting ships an unverified base. README.md, "One FROM",
-      # says why.
-      mapfile -t FROMS < <(grep -iE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}")
-      if [ "${#FROMS[@]}" -eq 0 ]; then
-        echo "No base image found to verify" >&2
-        exit 1
-      fi
-      if [ "${#FROMS[@]}" -gt 1 ]; then
-        echo "${CONTAINERFILE} has ${#FROMS[@]} lines that open with FROM:" >&2
-        printf '  %s\n' "${FROMS[@]}" >&2
-        echo "This action pins the base by digest with 'buildah --from', which" >&2
-        echo "replaces the first FROM only, so it supports single-stage files." >&2
-        echo "A line inside a RUN heredoc that begins with 'from' counts too," >&2
-        echo "whatever its indentation. Reword such a line." >&2
-        exit 1
-      fi
-      # Skip the FROM keyword and any --flag=value, so `FROM --platform=x img`
-      # yields the image and not the flag.
-      # sub() strips a CR so a CRLF Containerfile does not carry it into the
-      # image reference and fail later inside skopeo with an unrelated error.
-      RAW_BASE=$(awk '{ sub(/\r$/, ""); for (i = 2; i <= NF; i++) if ($i !~ /^--/) { print $i; exit } }' <<<"${FROMS[0]}")
-      if [ -z "${RAW_BASE}" ] || [ "${RAW_BASE}" = "scratch" ]; then
-        echo "Cannot verify a base of '${RAW_BASE:-<none>}' in ${CONTAINERFILE}." >&2
-        exit 1
-      fi
-
-      if [ -n "${BUILD_ARGS}" ]; then
-        while IFS='=' read -r key value; do
-          [ -z "$key" ] && continue
-          RAW_BASE="${RAW_BASE//\$\{$key\}/$value}"
-          RAW_BASE="${RAW_BASE//\$$key/$value}"
-        done <<< "${BUILD_ARGS}"
-      fi
-
-      # skopeo ships in the runner image.
-      DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${RAW_BASE}")
-      echo "BASE_TAG=${RAW_BASE}" >> "${GITHUB_ENV}"
-      echo "BASE_DIGEST=${DIGEST}" >> "${GITHUB_ENV}"
-
   - name: Install cosign
     if: github.event_name != 'pull_request' || inputs.cosign-public-key != ''
     # v3 line on purpose; see .github/dependabot.yml.
     uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
 
-  - name: Cosign verify base image
-    if: ${{ inputs.cosign-public-key != '' }}
+  - name: Verify and pin base images
     shell: bash
     env:
+      CONTAINERFILE: ${{ inputs.containerfile }}
+      BUILD_ARGS: ${{ inputs.build-args }}
       COSIGN_PUBLIC_KEY: ${{ inputs.cosign-public-key }}
-    run: |
-      set -exuo pipefail
-
-      if echo "${COSIGN_PUBLIC_KEY}" | grep -qE '^https?://'; then
-        cosign verify --key "${COSIGN_PUBLIC_KEY}" "${BASE_TAG}@${BASE_DIGEST}"
-      else
-        echo "${COSIGN_PUBLIC_KEY}" > /tmp/cosign.pub
-        cosign verify --key /tmp/cosign.pub "${BASE_TAG}@${BASE_DIGEST}"
-      fi
-
-  - name: SLSA verify base image
-    if: ${{ inputs.slsa-verify-source != '' }}
-    shell: bash
-    env:
       SOURCE_URI: ${{ inputs.slsa-verify-source }}
     run: |
       set -exuo pipefail
 
-      slsa-verifier verify-image --source-uri "${SOURCE_URI}" "${BASE_TAG}@${BASE_DIGEST}"
+      # Every non-scratch FROM is a base: verify it, then rewrite the verified
+      # digest into this checkout's Containerfile, so the build runs on exactly
+      # what was verified. README.md, "Base images", holds the rules.
+      mapfile -t FROMS < <(grep -inE '^[[:space:]]*from[[:space:]]+' "${CONTAINERFILE}")
+      if [ "${#FROMS[@]}" -eq 0 ]; then
+        echo "No FROM in ${CONTAINERFILE}" >&2
+        exit 1
+      fi
+
+      KEY="${COSIGN_PUBLIC_KEY}"
+      if [ -n "${KEY}" ] && [[ ! "${KEY}" =~ ^https?:// ]]; then
+        printf '%s\n' "${KEY}" > /tmp/cosign.pub
+        KEY=/tmp/cosign.pub
+      fi
+
+      BASES=0
+      for ENTRY in "${FROMS[@]}"; do
+        # grep -n gives 'LINE:TEXT'. The image is the first field after FROM
+        # that is not a --flag; the CR strip keeps CRLF files out of skopeo.
+        N=${ENTRY%%:*}
+        ORIG=$(awk '{ sub(/\r$/, ""); for (i = 2; i <= NF; i++) if ($i !~ /^--/) { print $i; exit } }' <<<"${ENTRY#*:}")
+        if [ -z "${ORIG}" ]; then
+          echo "Line ${N} of ${CONTAINERFILE}: FROM without an image" >&2
+          exit 1
+        fi
+        if [[ "${ORIG,,}" == scratch ]]; then
+          continue
+        fi
+
+        RAW="${ORIG}"
+        if [ -n "${BUILD_ARGS}" ]; then
+          while IFS='=' read -r key value; do
+            [ -z "$key" ] && continue
+            RAW="${RAW//\$\{$key\}/$value}"
+            RAW="${RAW//\$$key/$value}"
+          done <<< "${BUILD_ARGS}"
+        fi
+        if [ -z "${RAW}" ] || [[ "${RAW,,}" == scratch ]]; then
+          echo "Line ${N} of ${CONTAINERFILE}: base resolves to '${RAW:-<none>}'" >&2
+          exit 1
+        fi
+
+        DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${RAW}")
+        PIN=${RAW}
+        [[ "${RAW}" == *@* ]] || PIN="${RAW}@${DIGEST}"
+        [ -z "${KEY}" ] || cosign verify --key "${KEY}" "${PIN}"
+        [ -z "${SOURCE_URI}" ] || slsa-verifier verify-image --source-uri "${SOURCE_URI}" "${PIN}"
+
+        # Image references contain neither '|' nor '&', so no escaping.
+        sed -i "${N}s|${ORIG}|${PIN}|" "${CONTAINERFILE}"
+
+        BASE_TAG="${RAW%%@*}"
+        BASE_DIGEST="${DIGEST}"
+        BASES=$((BASES + 1))
+      done
+
+      if [ "${BASES}" -eq 0 ]; then
+        echo "${CONTAINERFILE} has no non-scratch FROM. There is no base to verify." >&2
+        exit 1
+      fi
+      echo "BASE_TAG=${BASE_TAG}" >> "${GITHUB_ENV}"
+      echo "BASE_DIGEST=${BASE_DIGEST}" >> "${GITHUB_ENV}"
 
   - name: Build tag list for metadata action
     id: tags
@@ -166,8 +163,6 @@ runs:
     run: |
       set -euo pipefail
 
-      # Without overwrite-ref-tag the branch names the image; with it, the
-      # caller's value does, in both the ref tag and the dated ones.
       REF="type=ref,event=branch"
       NAME="{{branch}}"
       if [ -n "${OVERWRITE_REF_TAG}" ]; then
@@ -206,12 +201,6 @@ runs:
     id: build_image
     uses: redhat-actions/buildah-build@719e3c40d8af9790c23eca13f7daa339f2867034   # v3.1.0
     with:
-      # --from pins the base to the digest that cosign and slsa-verifier just
-      # verified. The FROM line names a tag, which buildah resolves again on
-      # its own, so without this the build can take a different image than the
-      # one the verification passed on, and the base.digest label then records
-      # the verified digest rather than the built one.
-      extra-args: --from ${{ env.BASE_TAG }}@${{ env.BASE_DIGEST }}
       containerfiles: ${{ inputs.containerfile }}
       context: ${{ inputs.context }}
       platforms: ${{ inputs.platform }}
@@ -266,5 +255,4 @@ runs:
       set -exuo pipefail
 
       # By digest, so a tag another job moved in between cannot fail this.
-      # The caller's checkout must hold the public key that matches signing-secret.
       cosign verify --key cosign.pub "${TAGS%%$'\n'*}@${DIGEST}"

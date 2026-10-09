@@ -3,13 +3,6 @@
 version: 3
 
 rules:
-# The self-pin names the commit the release tag sits on top of, so its version
-# comment can never match a tag object. README.md, "Security", says why the pin
-# is a SHA rather than `./`.
-- ignore: true
-  conditions:
-  - expr: |
-      ActionName matches "^MArpogaus/image-builder-action"
 # cosign-installer stays on its v3 line: with v4 the signature does not reach
 # GHCR and `cosign verify` fails. README.md, "Security", has the rest.
 - ignore: true
