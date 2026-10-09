@@ -70,11 +70,8 @@ digest with the current base image and skip the build when nothing changed.
 | `overwrite-ref-tag`  | Replace `{{branch}}` in generated tags, e.g. `31` gives `:31` and `:31-<sha>`. Use for a version matrix | No | `''` |
 | `latest-tag`         | Also publish `:latest` from the default branch; a matrix sets it for its highest version only | No | `true` |
 
-The base image is the one `FROM` in the Containerfile. The file must name a
-real image there. A multi-stage file and a `FROM scratch` are both refused.
-A `FROM ${BASE}` is resolved from `build-args` alone. Give the same value
-there even when the Containerfile has an `ARG` default. Without it the digest
-lookup fails on the literal `${BASE}`.
+Every non-scratch `FROM` image is resolved, verified and pinned. See
+"Base images".
 
 ## Outputs
 
@@ -112,10 +109,10 @@ basic` and `test-slsa` cover that through the reusable workflow.
   signing step back therefore sits in a file the pull request can edit. Only a
   branch in this repository carries the repository's secrets, so the ref is the
   gate.
-- The base image digest is read with `skopeo`. That tool ships in the runner
-  image, so it is trusted as much as the runner's `buildah` and `curl`. The
-  digest is a label, not a gate: the gates are `cosign-public-key` and
-  `slsa-verify-source`, and `slsa-verifier` is installed only when one is set.
+- Base digests are read with `skopeo`. That tool ships in the runner image,
+  so it is trusted as much as the runner's `buildah` and `curl`. Verification
+  gates on `cosign-public-key` and `slsa-verify-source`. Pinning to the
+  resolved digest happens either way.
 - `cosign-installer` stays on its v3 line (Cosign 2). With v4 the signature does
   not reach GHCR and `cosign verify` fails with "no signatures found".
   Dependabot ignores v4 in `.github/dependabot.yml`.
@@ -134,17 +131,29 @@ commit-message and branch hooks dormant. CI runs the same hooks on push and
 pull request. Dependabot updates the actions and the hook revisions weekly
 against `dev`.
 
-## One FROM
+## Base images
 
-The action verifies the base image by digest, then passes that digest to
-`buildah --from`. That flag replaces the first `FROM` alone. In a file with
-several stages the action therefore verifies one image and builds another.
-cosign and slsa-verifier both report green on such a build.
+Every `FROM` image in the Containerfile is resolved, verified and pinned
+before the build. `FROM scratch` helper stages are exempt. They carry build
+files and have no base.
 
-The step refuses a Containerfile with more than one `FROM`. It also refuses a
-single `FROM scratch`, because there is no base to verify. The match is
-deliberately permissive, and anything that opens like `FROM` counts.
-Over-counting refuses a build. Under-counting ships an unverified base.
+1. Each image reference resolves with `build-args`. A `FROM ${BASE}` needs
+   its value there, even when the Containerfile has an `ARG` default.
+   Without it the digest lookup fails on the literal `${BASE}`.
+2. `skopeo` reads the current digest. When `cosign-public-key` or
+   `slsa-verify-source` is set, that digest is verified with it. One key
+   and one source cover all bases.
+3. The step rewrites the `FROM` line to `<image>@<digest>` in the
+   checkout's Containerfile, so the build runs on exactly what was
+   verified.
+
+`org.opencontainers.image.base.name` and `org.opencontainers.image.base.digest`
+describe the last stage's base, the base of the published image.
+
+The `FROM` match is deliberately permissive. Any line that opens like
+`FROM` counts, also one inside a `RUN` heredoc. Such a line is treated as
+a base and breaks the build, so reword it. Over-counting refuses or
+breaks a build, under-counting ships an unverified base.
 
 ## License
 
