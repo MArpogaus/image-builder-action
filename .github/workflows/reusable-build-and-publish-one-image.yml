@@ -1,3 +1,10 @@
+# TEMPLATE: copy this file into your .github/workflows/ and replace
+# 'uses: ./' below with a SHA pin of MArpogaus/image-builder-action.
+# This file is not callable from another repository as it is: a relative ref
+# in a reusable workflow resolves against the caller's checkout, so an
+# external 'uses:' of this file fails instead of running a stale action.
+# image-builder-action's own CI calls it relatively, so every commit runs its
+# own action tree.
 name: Build and publish a container image
 
 permissions: {}
@@ -63,10 +70,9 @@ jobs:
 
     - name: Build and Push Image
       id: build
-      # Pinned by SHA, not `./`: a relative ref inside a reusable workflow is
-      # resolved against the caller's checkout, so a consumer would silently run
-      # their own tree instead of this action.
-      uses: MArpogaus/image-builder-action@47403ee3bcb371f2a699eb292485fc0478c3ba01 # v1.7.0
+      # TEMPLATE: replace with 'MArpogaus/image-builder-action@<sha>', then
+      # 'pinact run' to keep the comment current.
+      uses: ./
       with:
         image-name: ${{ inputs.image-name }}
         containerfile: ${{ inputs.containerfile }}

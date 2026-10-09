@@ -4,16 +4,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Composite action: build with buildah, push, sign with cosign, verify.
-Reusable workflow: the same, plus SLSA level 3 provenance. Optional
-verification of the base image by cosign key or SLSA source. Podman layers are
-cached between runs, and tags and labels come from the Git event.
+Workflow template: the same, plus SLSA level 3 provenance, in a copyable
+file. Optional verification of the base image by cosign key or SLSA source.
+Podman layers are cached between runs, and tags and labels come from the Git
+event.
 
 ## Usage
 
 Commit the public key that matches `SIGNING_SECRET` as `cosign.pub` in the
 repository root. The verify step reads it from the checkout.
 
-The reusable workflow builds, signs and attaches SLSA provenance:
+For build, signing and SLSA provenance, copy
+`.github/workflows/reusable-build-and-publish-one-image.yml` into your
+`.github/workflows/`, replace its `uses: ./` with a SHA pin of this action,
+and call it per matrix entry:
 
 ```yaml
 jobs:
@@ -23,7 +27,7 @@ jobs:
       packages: write
       id-token: write
       actions: read
-    uses: MArpogaus/image-builder-action/.github/workflows/reusable-build-and-publish-one-image.yml@v1.6.0
+    uses: ./.github/workflows/reusable-build-and-publish-one-image.yml
     with:
       image-name: my-cool-app
       containerfile: ./Containerfile
@@ -41,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: MArpogaus/image-builder-action@v1.6.0   # pin to the SHA in your own repo
+      - uses: MArpogaus/image-builder-action@v1.7.0   # pin to the SHA in your own repo
         with:
           image-name: my-cool-app
           containerfile: ./Containerfile
@@ -91,17 +95,15 @@ per entry make the tag sets disjoint, and the matrix can run in parallel.
 
 ## Security
 
-- The reusable workflow pins this repo's own action by SHA, because a relative
-  ref inside a reusable workflow resolves against the caller's checkout. Bump
-  that pin before a release tag, or a consumer gets a workflow that calls an
-  older action than the tag it took. `build-derived` and `build-overwrite-tag` call the action with `uses: ./`, so a
-commit's own tree is exercised by its CI. They get no SLSA provenance. `build-
-basic` and `test-slsa` cover that through the reusable workflow.
+- The provenance workflow is a template carrying `uses: ./`. It runs as it is
+  in this repo's CI and fails when called directly from another repository, so
+  a consumer can never silently get a stale action. Callers copy the file and
+  pin it by SHA. Every CI job, including the ones going through the template,
+  runs the commit's own action tree.
 - Every action is pinned to a SHA except the SLSA generator, which verifies its
   own tag and refuses a digest ref. `pinact run -u` updates and re-pins them.
-  `.pinact.yaml` holds three rules. The SLSA generator stays on its tag,
-  `cosign-installer` stays on v3, and the self-pin is skipped, because it
-  carries no tag of its own.
+  `.pinact.yaml` holds two rules: the SLSA generator stays on its tag, and
+  `cosign-installer` stays on v3.
 - The SLSA generator signs provenance keyless through GitHub OIDC. Images are
   signed with `SIGNING_SECRET`.
 - A pull request reaches the build jobs with an empty signing key. Those jobs

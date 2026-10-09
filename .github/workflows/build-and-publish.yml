@@ -29,9 +29,6 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
-  # `uses: ./` so this job runs the action as it is in this commit. The
-  # reusable workflow pins the action by SHA for consumers, so a job that went
-  # through it would test the last released action instead of this one.
   build-derived:
     if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -51,7 +48,7 @@ jobs:
         free-disk-space: false
         signing-secret: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
-  # `uses: ./`, for the same reason as build-derived. Covers scratch helper
+  # `uses: ./` runs the action as it is in this commit. Covers scratch helper
   # stages and a base behind them.
   build-staged:
     if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
@@ -94,7 +91,7 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
-  # `uses: ./`, for the same reason as build-derived.
+  # `uses: ./` runs the action as it is in this commit.
   build-overwrite-tag:
     if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
