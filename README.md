@@ -64,9 +64,9 @@ digest with the current base image and skip the build when nothing changed.
 | `image-name`         | Name of the image to be published                                  | **Yes**  | -         |
 | `containerfile`      | Path to the Containerfile                                          | **Yes**  | -         |
 | `platform`           | Target platform (e.g. `linux/amd64`)                               | **Yes**  | -         |
-| `signing-secret`     | The cosign private key. A secret named `SIGNING_SECRET` for the reusable workflow | **Yes** | - |
+| `signing-secret`     | The cosign private key. A secret named `SIGNING_SECRET` for the workflow template | **Yes** | - |
 | `context`            | Build context directory                                            | No       | `.`       |
-| `registry`           | The registry to push to (not exposed by the reusable workflow)     | No       | `ghcr.io/<owner>` |
+| `registry`           | The registry to push to (not exposed by the template)              | No       | `ghcr.io/<owner>` |
 | `slsa-verify-source` | Source URI for SLSA verification of the base image                 | No       | `''`      |
 | `cosign-public-key`  | Public key, or a URL to one, to verify the base image's signature  | No       | `''`      |
 | `build-args`         | Build arguments, newline-separated `KEY=VALUE`                     | No       | `''`      |

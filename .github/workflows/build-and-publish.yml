@@ -91,7 +91,6 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ github.event_name != 'pull_request' && secrets.SIGNING_SECRET || '' }}
 
-  # `uses: ./` runs the action as it is in this commit.
   build-overwrite-tag:
     if: github.ref_name == 'main' || github.ref_name == 'dev' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
