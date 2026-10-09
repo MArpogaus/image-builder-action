@@ -6,8 +6,9 @@
 Composite action: build with buildah, push, sign with cosign, verify.
 Workflow template: the same, plus SLSA level 3 provenance, in a copyable
 file. Optional verification of the base image by cosign key or SLSA source.
-Podman layers are cached between runs, and tags and labels come from the Git
-event.
+Tags and labels come from the Git event. Runners are ephemeral: every job
+re-pulls its base and rebuilds, which is why pinning a base to a resolved
+digest is also the only lever that makes layer reuse possible at all.
 
 ## Usage
 
